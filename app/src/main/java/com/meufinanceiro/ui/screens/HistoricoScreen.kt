@@ -57,7 +57,7 @@ fun HistoricoScreen(navController: NavController) {
 
     Scaffold(
         topBar = {
-            TopAppBar( // Corrigido para TopAppBar
+            TopAppBar(
                 title = { Text("Histórico de Transações") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
@@ -87,7 +87,8 @@ fun HistoricoScreen(navController: NavController) {
                     items(lista) { item ->
                         TransacaoCard(
                             item,
-                            onDelete = { viewModel.deletar(item.id) }
+                            // AQUI ESTAVA O ERRO: mudou de item.id para item.transacao.id
+                            onDelete = { viewModel.deletar(item.transacao.id) }
                         )
                     }
                 }
@@ -96,9 +97,6 @@ fun HistoricoScreen(navController: NavController) {
     }
 }
 
-// ------------------------------------
-// CARD DE CADA TRANSACAO (CORRETO)
-// ------------------------------------
 @Composable
 fun TransacaoCard(
     transacao: TransacaoComCategoria,
@@ -159,7 +157,6 @@ fun TransacaoCard(
     }
 }
 
-// FORMATA DATA
 fun formatDate(millis: Long): String {
     val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
     return sdf.format(Date(millis))
