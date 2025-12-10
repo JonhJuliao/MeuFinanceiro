@@ -23,6 +23,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.room.Room
 import com.meufinanceiro.backend.db.AppDatabase
+import com.meufinanceiro.backend.model.Categoria
+import com.meufinanceiro.backend.repository.CategoriaRepository
 import com.meufinanceiro.backend.repository.TransacaoRepository
 import com.meufinanceiro.ui.viewmodel.RegistrarViewModel
 import com.meufinanceiro.ui.viewmodel.RegistrarViewModelFactory
@@ -34,30 +36,32 @@ import java.util.*
 fun RegistrarScreen(navController: NavController) {
     val context = LocalContext.current
 
-    // 1. CONFIGURAÇÃO DO BANCO E VIEWMODEL (Cérebro da tela)
-    val db = remember {
-        Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build()
-    }
-    val repository = remember { TransacaoRepository(db.transacaoDao()) }
+    // 1. CONFIGURAÇÃO (Agora com 2 Repositórios: Transação e Categoria)
+    val db = remember { Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build() }
+
+    val transacaoRepo = remember { TransacaoRepository(db.transacaoDao()) }
+    val categoriaRepo = remember { CategoriaRepository(db.categoriaDao()) }
+
     val viewModel: RegistrarViewModel = viewModel(
-        factory = RegistrarViewModelFactory(repository)
+        factory = RegistrarViewModelFactory(transacaoRepo, categoriaRepo)
     )
 
-    // 2. ESTADOS DO FORMULÁRIO
+    // 2. ESTADOS
     var amountText by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf<String?>(null) }
-    var tipo by remember { mutableStateOf(TipoTela.DESPESA) }
 
+    // Guarda o OBJETO Categoria completo (para termos o ID)
+    var selectedCategory by remember { mutableStateOf<Categoria?>(null) }
+
+    var tipo by remember { mutableStateOf(TipoTela.DESPESA) }
     val sdf = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
 
-    // DATA (Padrão = Hoje)
+    // Lista real vinda do banco de dados (via ViewModel)
+    val listaCategorias by viewModel.categorias.collectAsState()
+
     val calendar = remember { Calendar.getInstance() }
     var dateMillis by remember { mutableStateOf(calendar.timeInMillis) }
-    var isSaving by remember { mutableStateOf(false) } // Para travar botão ao salvar
-
-    // Categorias (Depois mudaremos isso para vir do banco também, parte 2 do Colega B)
-    val sampleCategories = listOf("Alimentação", "Transporte", "Salário", "Lazer", "Contas", "Outros")
+    var isSaving by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -84,17 +88,13 @@ fun RegistrarScreen(navController: NavController) {
                     selected = tipo == TipoTela.RECEITA,
                     onClick = { tipo = TipoTela.RECEITA },
                     label = { Text("Receita") },
-                    leadingIcon = {
-                        if (tipo == TipoTela.RECEITA) Icon(Icons.Default.Check, null)
-                    }
+                    leadingIcon = { if (tipo == TipoTela.RECEITA) Icon(Icons.Default.Check, null) }
                 )
                 FilterChip(
                     selected = tipo == TipoTela.DESPESA,
                     onClick = { tipo = TipoTela.DESPESA },
                     label = { Text("Despesa") },
-                    leadingIcon = {
-                        if (tipo == TipoTela.DESPESA) Icon(Icons.Default.Check, null)
-                    }
+                    leadingIcon = { if (tipo == TipoTela.DESPESA) Icon(Icons.Default.Check, null) }
                 )
             }
 
@@ -138,7 +138,7 @@ fun RegistrarScreen(navController: NavController) {
                 leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null) }
             )
 
-            // CATEGORIA
+            // CATEGORIA (DROPDOWN REAL)
             var expanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(
                 expanded = expanded,
@@ -146,7 +146,8 @@ fun RegistrarScreen(navController: NavController) {
             ) {
                 OutlinedTextField(
                     readOnly = true,
-                    value = selectedCategory ?: "Escolha uma categoria",
+                    // Mostra o nome da categoria selecionada ou o aviso
+                    value = selectedCategory?.nome ?: "Escolha uma categoria",
                     onValueChange = {},
                     modifier = Modifier.fillMaxWidth().menuAnchor(),
                     label = { Text("Categoria") },
@@ -157,14 +158,21 @@ fun RegistrarScreen(navController: NavController) {
                     expanded = expanded,
                     onDismissRequest = { expanded = false }
                 ) {
-                    sampleCategories.forEach { cat ->
+                    if (listaCategorias.isEmpty()) {
                         DropdownMenuItem(
-                            text = { Text(cat) },
-                            onClick = {
-                                selectedCategory = cat
-                                expanded = false
-                            }
+                            text = { Text("Nenhuma categoria cadastrada. Vá em 'Categorias' para criar.") },
+                            onClick = { expanded = false }
                         )
+                    } else {
+                        listaCategorias.forEach { categoria ->
+                            DropdownMenuItem(
+                                text = { Text(categoria.nome) },
+                                onClick = {
+                                    selectedCategory = categoria // Salva o OBJETO completo (com ID)
+                                    expanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -179,7 +187,7 @@ fun RegistrarScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // BOTÃO SALVAR (AGORA FUNCIONA!)
+            // BOTÃO SALVAR
             Button(
                 enabled = !isSaving,
                 onClick = {
@@ -191,16 +199,20 @@ fun RegistrarScreen(navController: NavController) {
                         else -> {
                             isSaving = true
 
-                            // CHAMA O VIEWMODEL PARA SALVAR NO BANCO
                             viewModel.salvarTransacao(
                                 tipoTela = tipo,
                                 valor = parsed,
                                 dataMillis = dateMillis,
-                                categoria = selectedCategory!!,
+                                categoriaId = selectedCategory!!.id, // Envia o ID real
                                 descricao = description,
                                 onSuccess = {
+                                    isSaving = false
                                     Toast.makeText(context, "Salvo com sucesso!", Toast.LENGTH_SHORT).show()
-                                    navController.popBackStack() // Volta pra Home
+                                    navController.popBackStack()
+                                },
+                                onError = { msg ->
+                                    isSaving = false
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                                 }
                             )
                         }
@@ -218,5 +230,6 @@ fun RegistrarScreen(navController: NavController) {
         }
     }
 }
-
-enum class TipoTela { RECEITA, DESPESA }
+enum class TipoTela {
+    RECEITA, DESPESA
+}

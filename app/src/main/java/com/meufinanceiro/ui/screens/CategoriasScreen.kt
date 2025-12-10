@@ -6,31 +6,48 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.List // Mudei para List para não dar erro
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.room.Room
+import com.meufinanceiro.backend.db.AppDatabase
+import com.meufinanceiro.backend.model.Categoria
+import com.meufinanceiro.backend.repository.CategoriaRepository
+import com.meufinanceiro.ui.viewmodel.CategoriasViewModel
+import com.meufinanceiro.ui.viewmodel.CategoriasViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoriasScreen(
-    navController: NavController,
-    // quando integrar com o backend, isso vira lista vinda do ViewModel
-    categoriasIniciais: List<String> = listOf("Alimentação", "Transporte", "Lazer"),
-    onAddCategoria: (String) -> Unit = {},
-    onDeleteCategoria: (String) -> Unit = {}
+    navController: NavController
 ) {
-    var categorias by remember { mutableStateOf(categoriasIniciais.toMutableList()) }
+    val context = LocalContext.current
+
+    // 1. Configuração do Banco e ViewModel
+    val db = remember {
+        Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build()
+    }
+    val repository = remember { CategoriaRepository(db.categoriaDao()) }
+    val viewModel: CategoriasViewModel = viewModel(
+        factory = CategoriasViewModelFactory(repository)
+    )
+
+    // 2. Observa a lista real do banco de dados
+    val listaCategorias by viewModel.categorias.collectAsState()
+
     var novaCategoria by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
-            TopAppBar( // Corrigido para TopAppBar
+            TopAppBar(
                 title = { Text("Categorias") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
@@ -55,7 +72,6 @@ fun CategoriasScreen(
                 onValueChange = { novaCategoria = it },
                 label = { Text("Nova categoria") },
                 singleLine = true,
-                // Mudei o ícone aqui para List (Category as vezes precisa de biblioteca extra)
                 leadingIcon = { Icon(Icons.Default.List, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -63,9 +79,9 @@ fun CategoriasScreen(
             Button(
                 onClick = {
                     val nome = novaCategoria.trim()
-                    if (nome.isNotEmpty() && nome !in categorias) {
-                        categorias.add(nome)
-                        onAddCategoria(nome)
+                    if (nome.isNotEmpty()) {
+                        // Chama o ViewModel para salvar no banco
+                        viewModel.adicionarCategoria(nome)
                         novaCategoria = ""
                     }
                 },
@@ -77,17 +93,16 @@ fun CategoriasScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Lista de categorias
+            // Lista de categorias vinda do Banco
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(categorias) { categoria ->
+                items(listaCategorias) { categoria ->
                     CategoriaCard(
-                        nome = categoria,
+                        categoria = categoria,
                         onDelete = {
-                            categorias.remove(categoria)
-                            onDeleteCategoria(categoria)
+                            viewModel.deletarCategoria(categoria)
                         }
                     )
                 }
@@ -98,7 +113,7 @@ fun CategoriasScreen(
 
 @Composable
 fun CategoriaCard(
-    nome: String,
+    categoria: Categoria,
     onDelete: () -> Unit
 ) {
     Card(
@@ -115,7 +130,7 @@ fun CategoriaCard(
         ) {
 
             Text(
-                text = nome,
+                text = categoria.nome,
                 style = MaterialTheme.typography.titleMedium
             )
 
