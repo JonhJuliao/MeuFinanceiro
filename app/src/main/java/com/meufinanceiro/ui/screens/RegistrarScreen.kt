@@ -19,20 +19,31 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.room.Room
+import com.meufinanceiro.backend.db.AppDatabase
+import com.meufinanceiro.backend.repository.TransacaoRepository
+import com.meufinanceiro.ui.viewmodel.RegistrarViewModel
+import com.meufinanceiro.ui.viewmodel.RegistrarViewModelFactory
 import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RegistrarScreen(
-    navController: NavController,
-    // callback para ligar ao backend quando quiser
-    onSave: suspend (tipo: TipoTela, valor: Double, dataMillis: Long, categoria: String, descricao: String?) -> Unit = { _, _, _, _, _ -> }
-) {
+fun RegistrarScreen(navController: NavController) {
     val context = LocalContext.current
 
-    // ESTADOS DO FORMULÁRIO
+    // 1. CONFIGURAÇÃO DO BANCO E VIEWMODEL (Cérebro da tela)
+    val db = remember {
+        Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build()
+    }
+    val repository = remember { TransacaoRepository(db.transacaoDao()) }
+    val viewModel: RegistrarViewModel = viewModel(
+        factory = RegistrarViewModelFactory(repository)
+    )
+
+    // 2. ESTADOS DO FORMULÁRIO
     var amountText by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
@@ -43,10 +54,10 @@ fun RegistrarScreen(
     // DATA (Padrão = Hoje)
     val calendar = remember { Calendar.getInstance() }
     var dateMillis by remember { mutableStateOf(calendar.timeInMillis) }
-    var isSaving by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) } // Para travar botão ao salvar
 
-    // Categorias de exemplo
-    val sampleCategories = listOf("Alimentação", "Transporte", "Salário", "Lazer", "Outros")
+    // Categorias (Depois mudaremos isso para vir do banco também, parte 2 do Colega B)
+    val sampleCategories = listOf("Alimentação", "Transporte", "Salário", "Lazer", "Contas", "Outros")
 
     Scaffold(
         topBar = {
@@ -67,16 +78,14 @@ fun RegistrarScreen(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. SELETOR DE TIPO (Receita / Despesa)
+            // TIPO (Receita / Despesa)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilterChip(
                     selected = tipo == TipoTela.RECEITA,
                     onClick = { tipo = TipoTela.RECEITA },
                     label = { Text("Receita") },
                     leadingIcon = {
-                        if (tipo == TipoTela.RECEITA) {
-                            Icon(Icons.Default.Check, contentDescription = null)
-                        }
+                        if (tipo == TipoTela.RECEITA) Icon(Icons.Default.Check, null)
                     }
                 )
                 FilterChip(
@@ -84,30 +93,26 @@ fun RegistrarScreen(
                     onClick = { tipo = TipoTela.DESPESA },
                     label = { Text("Despesa") },
                     leadingIcon = {
-                        if (tipo == TipoTela.DESPESA) {
-                            Icon(Icons.Default.Check, contentDescription = null)
-                        }
+                        if (tipo == TipoTela.DESPESA) Icon(Icons.Default.Check, null)
                     }
                 )
             }
 
-            // 2. CAMPO DE VALOR
+            // VALOR
             OutlinedTextField(
                 value = amountText,
                 onValueChange = { new ->
-                    // Permite apenas números, ponto e vírgula
                     val filtered = new.filter { it.isDigit() || it == '.' || it == ',' }
                     amountText = filtered
                 },
                 label = { Text("Valor (ex: 123.45)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                // Troquei o ícone Money (que falta) pelo ShoppingCart
                 leadingIcon = { Icon(Icons.Default.ShoppingCart, contentDescription = null) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // 3. CAMPO DE DATA (DatePicker)
+            // DATA
             val dateLabel = remember(dateMillis) { sdf.format(Date(dateMillis)) }
             val datePickerOnClick = {
                 val c = Calendar.getInstance().apply { timeInMillis = dateMillis }
@@ -128,17 +133,13 @@ fun RegistrarScreen(
                 value = dateLabel,
                 onValueChange = {},
                 readOnly = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { datePickerOnClick() },
+                modifier = Modifier.fillMaxWidth().clickable { datePickerOnClick() },
                 label = { Text("Data") },
-                // Troquei CalendarToday (que falta) pelo DateRange
                 leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null) }
             )
 
-            // 4. CAMPO DE CATEGORIA (Dropdown)
+            // CATEGORIA
             var expanded by remember { mutableStateOf(false) }
-
             ExposedDropdownMenuBox(
                 expanded = expanded,
                 onExpandedChange = { expanded = it }
@@ -147,11 +148,8 @@ fun RegistrarScreen(
                     readOnly = true,
                     value = selectedCategory ?: "Escolha uma categoria",
                     onValueChange = {},
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(), // Importante para o Menu
+                    modifier = Modifier.fillMaxWidth().menuAnchor(),
                     label = { Text("Categoria") },
-                    // Troquei Category (que falta) pelo List
                     leadingIcon = { Icon(Icons.Default.List, contentDescription = null) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
                 )
@@ -171,7 +169,7 @@ fun RegistrarScreen(
                 }
             }
 
-            // 5. CAMPO DE DESCRIÇÃO
+            // DESCRIÇÃO
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
@@ -181,40 +179,44 @@ fun RegistrarScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 6. BOTÃO DE SALVAR
+            // BOTÃO SALVAR (AGORA FUNCIONA!)
             Button(
+                enabled = !isSaving,
                 onClick = {
-                    // Validação simples
                     val parsed = amountText.replace(",", ".").toDoubleOrNull()
                     when {
-                        parsed == null -> {
-                            Toast.makeText(context, "Insira um valor válido", Toast.LENGTH_SHORT).show()
-                        }
-                        parsed <= 0.0 -> {
-                            Toast.makeText(context, "Valor deve ser maior que 0", Toast.LENGTH_SHORT).show()
-                        }
-                        selectedCategory == null -> {
-                            Toast.makeText(context, "Escolha uma categoria", Toast.LENGTH_SHORT).show()
-                        }
+                        parsed == null -> Toast.makeText(context, "Valor inválido", Toast.LENGTH_SHORT).show()
+                        parsed <= 0.0 -> Toast.makeText(context, "Valor deve ser maior que 0", Toast.LENGTH_SHORT).show()
+                        selectedCategory == null -> Toast.makeText(context, "Escolha uma categoria", Toast.LENGTH_SHORT).show()
                         else -> {
                             isSaving = true
-                            Toast.makeText(context, "Salvando...", Toast.LENGTH_SHORT).show()
-                            navController.popBackStack()
+
+                            // CHAMA O VIEWMODEL PARA SALVAR NO BANCO
+                            viewModel.salvarTransacao(
+                                tipoTela = tipo,
+                                valor = parsed,
+                                dataMillis = dateMillis,
+                                categoria = selectedCategory!!,
+                                descricao = description,
+                                onSuccess = {
+                                    Toast.makeText(context, "Salvo com sucesso!", Toast.LENGTH_SHORT).show()
+                                    navController.popBackStack() // Volta pra Home
+                                }
+                            )
                         }
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Salvar", fontSize = 16.sp)
+                if (isSaving) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Salvar", fontSize = 16.sp)
+                }
             }
         }
     }
 }
 
-// ENUM auxiliar
-enum class TipoTela {
-    RECEITA, DESPESA
-}
+enum class TipoTela { RECEITA, DESPESA }
