@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
@@ -18,15 +19,38 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.room.Room
+import com.meufinanceiro.backend.db.AppDatabase
+import com.meufinanceiro.backend.repository.TransacaoRepository
 import com.meufinanceiro.navigation.Screen
+import com.meufinanceiro.ui.viewmodel.HomeViewModel
+import com.meufinanceiro.ui.viewmodel.HomeViewModelFactory
 
 @Composable
 fun HomeScreen(navController: NavController) {
-    // Estado para esconder/mostrar saldo (feature clássica de banco)
+    val context = LocalContext.current
+
+    // 1. Configuração do Banco e ViewModel
+    val db = remember { Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build() }
+    val repository = remember { TransacaoRepository(db.transacaoDao()) }
+    val viewModel: HomeViewModel = viewModel(
+        factory = HomeViewModelFactory(repository)
+    )
+
+    // 2. Observa o saldo real
+    val saldo by viewModel.saldoTotal.collectAsState()
+
+    // 3. Efeito Mágico: Atualiza o saldo sempre que a tela aparece
+    LaunchedEffect(Unit) {
+        viewModel.carregarSaldo()
+    }
+
     var showBalance by remember { mutableStateOf(true) }
 
     Scaffold(
@@ -37,9 +61,7 @@ fun HomeScreen(navController: NavController) {
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            // ---------------------------------------------
-            // 1. CABEÇALHO COM SALDO (Estilo Cartão)
-            // ---------------------------------------------
+            // HERO CARD
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -60,37 +82,58 @@ fun HomeScreen(navController: NavController) {
                         .fillMaxSize(),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Topo do cartão: Nome e Olho
+                    // Topo
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Olá, Guilherme",
+                            text = "Olá, ${viewModel.nomeUsuario}",
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Medium
                         )
-                        IconButton(onClick = { showBalance = !showBalance }) {
-                            Icon(
-                                imageVector = if (showBalance) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                contentDescription = "Mostrar saldo",
-                                tint = Color.White.copy(alpha = 0.8f)
-                            )
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.2f),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Perfil",
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
 
-                    // Centro do cartão: Saldo
+                    // Saldo Real
                     Column {
-                        Text(
-                            text = "Seu saldo total",
-                            color = Color.White.copy(alpha = 0.8f),
-                            fontSize = 14.sp
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Seu saldo total",
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(
+                                onClick = { showBalance = !showBalance },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (showBalance) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = "Esconder saldo",
+                                    tint = Color.White.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(4.dp))
+
                         Text(
-                            text = if (showBalance) "R$ 1.250,00" else "R$ •••••",
+                            text = if (showBalance) "R$ %.2f".format(saldo) else "R$ •••••",
                             color = Color.White,
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Bold
@@ -99,9 +142,7 @@ fun HomeScreen(navController: NavController) {
                 }
             }
 
-            // ---------------------------------------------
-            // 2. AÇÕES RÁPIDAS (Botões redondos)
-            // ---------------------------------------------
+            // GRID DE BOTÕES
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
@@ -138,9 +179,6 @@ fun HomeScreen(navController: NavController) {
                     onClick = { navController.navigate(Screen.Categorias.route) }
                 )
             }
-
-            // Aqui embaixo você poderia colocar uma lista das "Últimas 3 transações"
-            // para a tela não ficar vazia
         }
     }
 }
@@ -155,11 +193,10 @@ fun ActionButton(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.width(80.dp)
     ) {
-        // O botão em si (Círculo)
         Surface(
             onClick = onClick,
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
             modifier = Modifier.size(60.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -174,7 +211,6 @@ fun ActionButton(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // O texto embaixo
         Text(
             text = label,
             fontSize = 12.sp,
