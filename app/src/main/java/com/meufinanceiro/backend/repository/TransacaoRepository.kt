@@ -30,4 +30,12 @@ class TransacaoRepository(
 
     suspend fun buscarComCategoriaPorId(id: Long): TransacaoComCategoria? =
         dao.buscarComCategoriaPorId(id)
+
+    suspend fun listarPorPeriodo(
+        inicio: Long,
+        fim: Long
+    ): List<TransacaoComCategoria> {
+        return dao.listarPorPeriodo(inicio, fim)
+    }
+
 }

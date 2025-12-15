@@ -31,4 +31,18 @@ interface TransacaoDao {
     @Transaction
     @Query("SELECT * FROM transacoes WHERE id = :id")
     suspend fun buscarComCategoriaPorId(id: Long): TransacaoComCategoria?
+
+    @Transaction
+    @Query(
+        """
+        SELECT * FROM transacoes
+        WHERE dataMillis BETWEEN :inicio AND :fim
+        ORDER BY dataMillis DESC
+        """
+    )
+    suspend fun listarPorPeriodo(
+        inicio: Long,
+        fim: Long
+    ): List<TransacaoComCategoria>
+
 }

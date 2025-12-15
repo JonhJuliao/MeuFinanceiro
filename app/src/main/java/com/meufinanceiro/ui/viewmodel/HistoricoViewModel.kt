@@ -20,14 +20,22 @@ class HistoricoViewModel(
         atualizarLista()
     }
 
-    // Função pública para a tela chamar
     fun atualizarLista() {
         viewModelScope.launch {
             _transacoes.value = repository.listarComCategoria()
         }
     }
 
-    // Função de deletar também atualiza a lista depois
+    fun filtrarPorPeriodo(inicio: Long, fim: Long) {
+        viewModelScope.launch {
+            _transacoes.value = repository.listarPorPeriodo(inicio, fim)
+        }
+    }
+
+    fun limparFiltro() {
+        atualizarLista()
+    }
+
     fun deletar(transacaoId: Long) {
         viewModelScope.launch {
             val itemCompleto = repository.buscarComCategoriaPorId(transacaoId)
@@ -35,7 +43,7 @@ class HistoricoViewModel(
                 // Precisamos converter de volta para Transacao simples para deletar
                 val transacaoParaDeletar = itemCompleto.transacao
                 repository.deletar(transacaoParaDeletar)
-                atualizarLista() // Recarrega após deletar
+                atualizarLista()
             }
         }
     }

@@ -1,16 +1,13 @@
 package com.meufinanceiro.ui.screens
 
+import android.app.DatePickerDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +29,7 @@ import com.meufinanceiro.ui.extensions.toCurrency
 import com.meufinanceiro.ui.extensions.toDateFormat
 import com.meufinanceiro.ui.viewmodel.HistoricoFactory
 import com.meufinanceiro.ui.viewmodel.HistoricoViewModel
+import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,8 +45,21 @@ fun HistoricoScreen(navController: NavController) {
 
     val lista by viewModel.transacoes.collectAsState()
 
-    LaunchedEffect(Unit) {
-        viewModel.atualizarLista()
+    var dataInicio by remember { mutableStateOf<Long?>(null) }
+    var dataFim by remember { mutableStateOf<Long?>(null) }
+
+    fun showDatePicker(onDateSelected: (Long) -> Unit) {
+        val calendar = Calendar.getInstance()
+        DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                calendar.set(year, month, day, 0, 0, 0)
+                onDateSelected(calendar.timeInMillis)
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        ).show()
     }
 
     Scaffold(
@@ -71,43 +82,92 @@ fun HistoricoScreen(navController: NavController) {
                 .fillMaxSize()
         ) {
 
+            // 🔎 FILTRO POR DATA
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+
+                    Text(
+                        text = "Filtrar por período",
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            modifier = Modifier.weight(1f),
+                            onClick = { showDatePicker { dataInicio = it } }
+                        ) {
+                            Text(dataInicio?.toDateFormat() ?: "Data início")
+                        }
+
+                        Button(
+                            modifier = Modifier.weight(1f),
+                            onClick = { showDatePicker { dataFim = it } }
+                        ) {
+                            Text(dataFim?.toDateFormat() ?: "Data fim")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            modifier = Modifier.weight(1f),
+                            enabled = dataInicio != null && dataFim != null,
+                            onClick = {
+                                viewModel.filtrarPorPeriodo(dataInicio!!, dataFim!!)
+                            }
+                        ) {
+                            Text("Filtrar")
+                        }
+
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                dataInicio = null
+                                dataFim = null
+                                viewModel.limparFiltro()
+                            }
+                        ) {
+                            Text("Limpar")
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // LISTA / ESTADO VAZIO
             if (lista.isEmpty()) {
-                // ESTADO VAZIO
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Surface(
-                        modifier = Modifier.size(120.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.List,
-                                contentDescription = null,
-                                modifier = Modifier.size(60.dp),
-                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
+                    Icon(
+                        imageVector = Icons.Default.List,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                    )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
                         text = "Nenhuma movimentação",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        fontWeight = FontWeight.Bold
                     )
 
                     Text(
                         text = "Suas receitas e despesas aparecerão aqui.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
             } else {
@@ -115,7 +175,6 @@ fun HistoricoScreen(navController: NavController) {
                     items(lista) { item ->
                         TransacaoCard(
                             transacao = item,
-                            // AQUI: Ao clicar, manda o ID para a rota "registrar?id=..."
                             onClick = {
                                 navController.navigate("registrar?id=${item.transacao.id}")
                             },
@@ -131,7 +190,7 @@ fun HistoricoScreen(navController: NavController) {
 @Composable
 fun TransacaoCard(
     transacao: TransacaoComCategoria,
-    onClick: () -> Unit, // <--- NOVO PARÂMETRO
+    onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
     val isReceita = transacao.transacao.tipo == TipoTransacao.RECEITA
@@ -149,7 +208,7 @@ fun TransacaoCard(
     val icone = if (isReceita) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward
 
     Card(
-        onClick = onClick, // <--- CARD AGORA É CLICÁVEL
+        onClick = onClick,
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
         modifier = Modifier.fillMaxWidth()
@@ -160,6 +219,7 @@ fun TransacaoCard(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+
             Surface(
                 shape = CircleShape,
                 color = valorColor.copy(alpha = 0.2f),
@@ -180,16 +240,12 @@ fun TransacaoCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = transacao.categoriaNome,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    fontWeight = FontWeight.Bold
                 )
 
                 if (!transacao.transacao.descricao.isNullOrBlank()) {
                     Text(
                         text = transacao.transacao.descricao,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -206,19 +262,14 @@ fun TransacaoCard(
                 Text(
                     text = transacao.transacao.valor.toCurrency(),
                     color = valorColor,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontWeight = FontWeight.Bold
                 )
 
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(32.dp)
-                ) {
+                IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = "Excluir",
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
-                        modifier = Modifier.size(20.dp)
+                        tint = MaterialTheme.colorScheme.error
                     )
                 }
             }
