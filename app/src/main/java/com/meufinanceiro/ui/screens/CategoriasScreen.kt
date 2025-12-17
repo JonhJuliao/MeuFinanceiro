@@ -10,6 +10,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+// Importante para usar a delegação "by" com States
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -31,25 +34,33 @@ fun CategoriasScreen(
 ) {
     val context = LocalContext.current
 
-    // 1. Configuração do Banco e ViewModel
+    // 1. CONFIGURAÇÃO DO BANCO DE DADOS E VIEWMODEL
+    // O 'remember' garante que o banco não seja recriado toda vez que a tela redesenha
     val db = remember {
         Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build()
     }
     val repository = remember { CategoriaRepository(db.categoriaDao()) }
+
+    // Cria o ViewModel usando a Factory (necessário para passar o repository como argumento)
     val viewModel: CategoriasViewModel = viewModel(
         factory = CategoriasViewModelFactory(repository)
     )
 
-    // 2. Observa a lista real do banco de dados
+    // 2. OBSERVANDO OS DADOS
+    // Converte o fluxo de dados do banco (Flow) em um Estado do Compose.
+    // Assim, sempre que o banco mudar, a tela atualiza sozinha.
     val listaCategorias by viewModel.categorias.collectAsState()
 
+    // Estado local para guardar o texto que o usuário digita no campo "Nova categoria"
     var novaCategoria by remember { mutableStateOf("") }
 
+    // Scaffold fornece a estrutura padrão (Barra no topo + Conteúdo)
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Categorias") },
                 navigationIcon = {
+                    // Botão de voltar para a Home
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
                     }
@@ -60,28 +71,30 @@ fun CategoriasScreen(
 
         Column(
             modifier = Modifier
-                .padding(padding)
+                .padding(padding) // Respeita o espaço da TopBar
                 .padding(16.dp)
                 .fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp) // Espaço entre os itens da coluna
         ) {
 
-            // Campo + botão de adicionar
+            // --- CAMPO DE CADASTRO ---
             OutlinedTextField(
                 value = novaCategoria,
-                onValueChange = { novaCategoria = it },
+                onValueChange = { novaCategoria = it }, // Atualiza o estado enquanto digita
                 label = { Text("Nova categoria") },
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Default.List, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // --- BOTÃO ADICIONAR ---
             Button(
                 onClick = {
-                    val nome = novaCategoria.trim()
+                    val nome = novaCategoria.trim() // Remove espaços em branco extras
                     if (nome.isNotEmpty()) {
-                        // Chama o ViewModel para salvar no banco
+                        // Chama o ViewModel para salvar no banco de dados
                         viewModel.adicionarCategoria(nome)
+                        // Limpa o campo de texto após salvar
                         novaCategoria = ""
                     }
                 },
@@ -93,15 +106,19 @@ fun CategoriasScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Lista de categorias vinda do Banco
+            // --- LISTAGEM (LazyColumn) ---
+            // Usamos LazyColumn em vez de Column para listas que podem crescer,
+            // pois ela é otimizada e tem rolagem automática.
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
+                // Itera sobre a lista que veio do banco
                 items(listaCategorias) { categoria ->
                     CategoriaCard(
                         categoria = categoria,
                         onDelete = {
+                            // Chama o ViewModel para deletar este item específico
                             viewModel.deletarCategoria(categoria)
                         }
                     )
@@ -111,10 +128,11 @@ fun CategoriasScreen(
     }
 }
 
+// COMPONENTE VISUAL PARA CADA ITEM DA LISTA
 @Composable
 fun CategoriaCard(
     categoria: Categoria,
-    onDelete: () -> Unit
+    onDelete: () -> Unit // Recebe uma função para executar quando clicar na lixeira
 ) {
     Card(
         shape = RoundedCornerShape(14.dp),
@@ -125,7 +143,7 @@ fun CategoriaCard(
             modifier = Modifier
                 .padding(16.dp)
                 .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.SpaceBetween, // Texto na esquerda, ícone na direita
             verticalAlignment = Alignment.CenterVertically
         ) {
 
@@ -134,11 +152,12 @@ fun CategoriaCard(
                 style = MaterialTheme.typography.titleMedium
             )
 
+            // Botão de Deletar
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Default.Delete,
                     contentDescription = "Excluir categoria",
-                    tint = MaterialTheme.colorScheme.error
+                    tint = MaterialTheme.colorScheme.error // Cor vermelha de erro
                 )
             }
         }

@@ -37,22 +37,34 @@ fun HistoricoScreen(navController: NavController) {
 
     val context = LocalContext.current
 
+    // 1. CONFIGURAÇÃO DE DEPENDÊNCIAS (MVVM)
+    // Inicializa o Banco de Dados e o Repositório.
+    // O 'remember' garante que não recriamos o banco a cada recomposição da tela.
     val db = remember {
         Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build()
     }
     val repository = remember { TransacaoRepository(db.transacaoDao()) }
+
+    // Cria o ViewModel usando uma Factory customizada para injetar o repositório
     val viewModel: HistoricoViewModel = viewModel(factory = HistoricoFactory(repository))
 
+    // 2. OBSERVANDO O ESTADO (Reatividade)
+    // A tela "escuta" o StateFlow do ViewModel.
+    // Sempre que a lista muda no ViewModel, a tela se redesenha automaticamente.
     val lista by viewModel.transacoes.collectAsState()
 
+    // 3. ESTADOS LOCAIS PARA O FILTRO
+    // Guardam as datas selecionadas pelo usuário (pode ser null se não selecionou ainda)
     var dataInicio by remember { mutableStateOf<Long?>(null) }
     var dataFim by remember { mutableStateOf<Long?>(null) }
 
+    // Função auxiliar para abrir o Calendário Nativo do Android (DatePicker)
     fun showDatePicker(onDateSelected: (Long) -> Unit) {
         val calendar = Calendar.getInstance()
         DatePickerDialog(
             context,
             { _, year, month, day ->
+                // Ajusta o calendário para a data escolhida e retorna os milissegundos
                 calendar.set(year, month, day, 0, 0, 0)
                 onDateSelected(calendar.timeInMillis)
             },
@@ -82,7 +94,9 @@ fun HistoricoScreen(navController: NavController) {
                 .fillMaxSize()
         ) {
 
-            // 🔎 FILTRO POR DATA
+            // ==========================================
+            // SEÇÃO 1: CARTÃO DE FILTRO DE DATA
+            // ==========================================
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -99,11 +113,13 @@ fun HistoricoScreen(navController: NavController) {
 
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    // Botões para selecionar Data Início e Fim
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             modifier = Modifier.weight(1f),
                             onClick = { showDatePicker { dataInicio = it } }
                         ) {
+                            // Mostra a data formatada ou o texto padrão
                             Text(dataInicio?.toDateFormat() ?: "Data início")
                         }
 
@@ -117,9 +133,11 @@ fun HistoricoScreen(navController: NavController) {
 
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    // Botões de Ação (Filtrar e Limpar)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             modifier = Modifier.weight(1f),
+                            // Só habilita o botão se as duas datas foram escolhidas
                             enabled = dataInicio != null && dataFim != null,
                             onClick = {
                                 viewModel.filtrarPorPeriodo(dataInicio!!, dataFim!!)
@@ -131,6 +149,7 @@ fun HistoricoScreen(navController: NavController) {
                         OutlinedButton(
                             modifier = Modifier.weight(1f),
                             onClick = {
+                                // Limpa os estados locais e reseta a lista no ViewModel
                                 dataInicio = null
                                 dataFim = null
                                 viewModel.limparFiltro()
@@ -144,7 +163,12 @@ fun HistoricoScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // LISTA / ESTADO VAZIO
+            // ==========================================
+            // SEÇÃO 2: LISTAGEM INTELIGENTE
+            // ==========================================
+
+            // Lógica de "Empty State" (Estado Vazio)
+            // Se não houver itens, mostramos um aviso amigável em vez de uma tela em branco.
             if (lista.isEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -171,11 +195,13 @@ fun HistoricoScreen(navController: NavController) {
                     )
                 }
             } else {
+                // Se houver itens, usamos LazyColumn para performance (carrega sob demanda)
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(lista) { item ->
                         TransacaoCard(
                             transacao = item,
                             onClick = {
+                                // Navega para a tela de Registro passando o ID para edição
                                 navController.navigate("registrar?id=${item.transacao.id}")
                             },
                             onDelete = { viewModel.deletar(item.transacao.id) }
@@ -187,12 +213,16 @@ fun HistoricoScreen(navController: NavController) {
     }
 }
 
+// ==========================================
+// COMPONENTE: CARD DA TRANSAÇÃO
+// ==========================================
 @Composable
 fun TransacaoCard(
     transacao: TransacaoComCategoria,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
+    // Define estilo visual baseado no tipo (Receita = Verde/Cima, Despesa = Vermelho/Baixo)
     val isReceita = transacao.transacao.tipo == TipoTransacao.RECEITA
 
     val containerColor = if (isReceita)
@@ -220,6 +250,7 @@ fun TransacaoCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
 
+            // Ícone circular colorido
             Surface(
                 shape = CircleShape,
                 color = valorColor.copy(alpha = 0.2f),
@@ -237,9 +268,10 @@ fun TransacaoCard(
 
             Spacer(modifier = Modifier.width(16.dp))
 
+            // Informações Centrais (Categoria, Descrição, Data)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = transacao.categoriaNome,
+                    text = transacao.categoriaNome, // Extension property usada aqui
                     fontWeight = FontWeight.Bold
                 )
 
@@ -252,15 +284,16 @@ fun TransacaoCard(
                 }
 
                 Text(
-                    text = transacao.transacao.dataMillis.toDateFormat(),
+                    text = transacao.transacao.dataMillis.toDateFormat(), // Extension function
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
 
+            // Lado Direito (Valor e Botão Excluir)
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = transacao.transacao.valor.toCurrency(),
+                    text = transacao.transacao.valor.toCurrency(), // Extension function
                     color = valorColor,
                     fontWeight = FontWeight.Bold
                 )

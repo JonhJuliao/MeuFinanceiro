@@ -26,7 +26,10 @@ fun ResumoFinanceiroScreen(navController: NavController) {
 
     val context = LocalContext.current
 
-    // Instancia o banco
+    // 1. CONSTRUÇÃO DA ARQUITETURA (Injeção de Dependências)
+    // Aqui montamos a estrutura completa necessária para o ViewModel funcionar.
+
+    // Passo A: Banco de Dados
     val db = remember {
         Room.databaseBuilder(
             context,
@@ -35,7 +38,8 @@ fun ResumoFinanceiroScreen(navController: NavController) {
         ).build()
     }
 
-    // Instancia o service real
+    // Passo B: Service (Lógica de Negócio)
+    // O Service precisa do Repository, que precisa do DAO do banco.
     val service = remember {
         ResumoFinanceiroService(
             transacaoRepository = TransacaoRepository(
@@ -44,11 +48,15 @@ fun ResumoFinanceiroScreen(navController: NavController) {
         )
     }
 
-    // ViewModel
+    // Passo C: ViewModel
+    // Usamos a Factory para entregar o Service pronto para o ViewModel.
     val viewModel: ResumoFinanceiroViewModel = viewModel(
         factory = ResumoFinanceiroFactory(service)
     )
 
+    // 2. OBSERVANDO OS ESTADOS (Reatividade)
+    // A tela fica "escutando" as mudanças nos valores calculados pelo ViewModel.
+    // Se você adicionar uma despesa nova, o 'despesas' muda e a tela atualiza sozinha.
     val receitas by viewModel.totalReceitas.collectAsState()
     val despesas by viewModel.totalDespesas.collectAsState()
     val saldo by viewModel.saldo.collectAsState()
@@ -69,14 +77,16 @@ fun ResumoFinanceiroScreen(navController: NavController) {
         }
     ) { padding ->
 
+        // 3. ORGANIZAÇÃO VISUAL (Coluna Vertical)
         Column(
             modifier = Modifier
                 .padding(padding)
                 .padding(20.dp)
                 .fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            verticalArrangement = Arrangement.spacedBy(24.dp) // Espaço entre os cartões
         ) {
 
+            // Cartão de Receitas (Verde/Azul)
             CardResumo(
                 titulo = "Receitas",
                 valor = receitas,
@@ -84,6 +94,7 @@ fun ResumoFinanceiroScreen(navController: NavController) {
                 textColor = MaterialTheme.colorScheme.primary
             )
 
+            // Cartão de Despesas (Vermelho)
             CardResumo(
                 titulo = "Despesas",
                 valor = despesas,
@@ -91,6 +102,9 @@ fun ResumoFinanceiroScreen(navController: NavController) {
                 textColor = MaterialTheme.colorScheme.error
             )
 
+            // Cartão de Saldo (Dinâmico)
+            // Lógica Visual: Se o saldo for positivo, usa a cor Primária.
+            // Se for negativo (devedor), usa a cor de Erro (Vermelho).
             CardResumo(
                 titulo = "Saldo",
                 valor = saldo,
@@ -107,6 +121,10 @@ fun ResumoFinanceiroScreen(navController: NavController) {
     }
 }
 
+// 4. COMPONENTE REUTILIZÁVEL
+// Em vez de repetir o código do Card 3 vezes lá em cima, criamos
+// uma função que desenha o card baseada nos parâmetros.
+// Isso deixa o código mais limpo e profissional (Princípio DRY - Don't Repeat Yourself).
 @Composable
 fun CardResumo(
     titulo: String,
@@ -133,6 +151,7 @@ fun CardResumo(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // Usa a extensão .toCurrency() que criamos para formatar (R$ 1.000,00)
             Text(
                 text = valor.toCurrency(),
                 fontSize = 26.sp,
