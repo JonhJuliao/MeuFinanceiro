@@ -136,7 +136,9 @@ fun HomeScreen(navController: NavController) {
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        // CORREÇÃO: Usando Branco Gelo (FAFAFA) para evitar o fundo rosado do Material 3
+        containerColor = if (isDark) MaterialTheme.colorScheme.background else Color(0xFFFAFAFA),
+
         // MUDANÇA 2: Adicionei o FAB (Botão Flutuante)
         floatingActionButton = {
             FloatingActionButton(
@@ -258,7 +260,8 @@ fun HomeScreen(navController: NavController) {
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp), // Alinhado com as margens da tela
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    // CORREÇÃO: Usando Cinza Claro (F5F5F5) em vez de surfaceVariant (que é rosado)
+                    containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF5F5F5)
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -403,7 +406,8 @@ fun MiniTransacaoCard(transacao: TransacaoComCategoria) {
 
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            // CORREÇÃO: Usando Branco Puro para contraste limpo
+            containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
         ),
         shape = RoundedCornerShape(12.dp),
         border = androidx.compose.foundation.BorderStroke(

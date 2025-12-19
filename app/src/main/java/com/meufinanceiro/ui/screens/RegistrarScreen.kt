@@ -1,26 +1,21 @@
 package com.meufinanceiro.ui.screens
 
-import android.app.DatePickerDialog
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-// MUDANÇA: Ícones Arredondados para visual moderno
-import androidx.compose.material.icons.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CalendarToday
-import androidx.compose.material.icons.rounded.Category
-import androidx.compose.material.icons.rounded.AttachMoney
-import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -33,6 +28,7 @@ import com.meufinanceiro.backend.repository.CategoriaRepository
 import com.meufinanceiro.backend.repository.TransacaoRepository
 import com.meufinanceiro.ui.viewmodel.RegistrarViewModel
 import com.meufinanceiro.ui.viewmodel.RegistrarViewModelFactory
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -43,8 +39,9 @@ fun RegistrarScreen(
     transacaoId: Long = 0L
 ) {
     val context = LocalContext.current
-
-    val db = remember { Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build() }
+    val db = remember {
+        Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build()
+    }
 
     val viewModel: RegistrarViewModel = viewModel(
         factory = RegistrarViewModelFactory(
@@ -53,30 +50,49 @@ fun RegistrarScreen(
         )
     )
 
-    var amountText by remember { mutableStateOf("") }
+    // --- ESTADOS ---
+    var rawAmountString by remember { mutableStateOf("") }
+    var amountTextFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     var description by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<Categoria?>(null) }
     var tipo by remember { mutableStateOf(TipoTela.DESPESA) }
-
-    val calendar = remember { Calendar.getInstance() }
-    var dateMillis by remember { mutableStateOf(calendar.timeInMillis) }
     var isSaving by remember { mutableStateOf(false) }
 
-    // Carrega dados para edição
+    // DATA (DatePicker do Material 3)
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    // --- CARREGAR DADOS PARA EDIÇÃO ---
     LaunchedEffect(transacaoId) {
         if (transacaoId > 0) {
             viewModel.carregarDadosParaEdicao(transacaoId) { transacao, categoria ->
-                amountText = transacao.valor.toString().replace(".", ",")
+                val valorCentavos = (transacao.valor * 100).toLong().toString()
+                rawAmountString = valorCentavos
+                amountTextFieldValue = TextFieldValue(formatarMoedaVisual(valorCentavos))
                 description = transacao.descricao ?: ""
-                dateMillis = transacao.dataMillis
+                datePickerState.selectedDateMillis = transacao.dataMillis
                 selectedCategory = categoria
                 tipo = if (transacao.tipo == TipoTransacao.RECEITA) TipoTela.RECEITA else TipoTela.DESPESA
             }
         }
     }
 
-    val sdf = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
     val listaCategorias by viewModel.categorias.collectAsState()
+
+    // DIÁLOGO DO DATE PICKER
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancelar") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -91,137 +107,145 @@ fun RegistrarScreen(
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
+                }
             )
-        },
-        containerColor = MaterialTheme.colorScheme.background
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .padding(innerPadding)
                 .padding(16.dp)
                 .fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
 
-            // --- 1. SELETOR DE TIPO (Chips Modernos) ---
+            // --- 1. SELETOR DE TIPO ---
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilterChip(
                     selected = tipo == TipoTela.RECEITA,
                     onClick = { tipo = TipoTela.RECEITA },
                     label = { Text("Receita") },
                     leadingIcon = { if (tipo == TipoTela.RECEITA) Icon(Icons.Rounded.Check, null) },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f).height(40.dp)
                 )
                 FilterChip(
                     selected = tipo == TipoTela.DESPESA,
                     onClick = { tipo = TipoTela.DESPESA },
                     label = { Text("Despesa") },
                     leadingIcon = { if (tipo == TipoTela.DESPESA) Icon(Icons.Rounded.Check, null) },
-                    modifier = Modifier.weight(1f),
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.errorContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onErrorContainer
-                    )
+                    modifier = Modifier.weight(1f).height(40.dp)
                 )
             }
 
-            // --- 2. CAMPO VALOR ---
+            // --- 2. CAMPO VALOR (MÁSCARA R$) ---
             OutlinedTextField(
-                value = amountText,
-                onValueChange = { new -> amountText = new.filter { it.isDigit() || it == '.' || it == ',' } },
+                value = amountTextFieldValue,
+                onValueChange = { novoValor ->
+                    val apenasNumeros = novoValor.text.filter { it.isDigit() }
+                    if (apenasNumeros.length <= 12) {
+                        rawAmountString = apenasNumeros
+                        val formatado = formatarMoedaVisual(rawAmountString)
+                        amountTextFieldValue = TextFieldValue(
+                            text = formatado,
+                            selection = TextRange(formatado.length)
+                        )
+                    }
+                },
                 label = { Text("Valor") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                leadingIcon = { Icon(Icons.Rounded.AttachMoney, null) }, // Ícone Dinheiro
+                leadingIcon = { Icon(Icons.Rounded.AttachMoney, null) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                textStyle = LocalTextStyle.current.copy(
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if(tipo == TipoTela.RECEITA) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                 )
             )
 
-            // --- 3. CAMPO DATA ---
-            val dateLabel = remember(dateMillis) { sdf.format(Date(dateMillis)) }
-            val datePickerOnClick = {
-                val c = Calendar.getInstance().apply { timeInMillis = dateMillis }
-                DatePickerDialog(
-                    context,
-                    { _, year, month, dayOfMonth ->
-                        val nc = Calendar.getInstance()
-                        nc.set(year, month, dayOfMonth)
-                        dateMillis = nc.timeInMillis
-                    },
-                    c.get(Calendar.YEAR),
-                    c.get(Calendar.MONTH),
-                    c.get(Calendar.DAY_OF_MONTH)
-                ).show()
+            // --- 3. CAMPO DATA (CORRIGIDO) ---
+            val dataFormatada = remember(datePickerState.selectedDateMillis) {
+                val millis = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
+                val cal = Calendar.getInstance().apply { timeInMillis = millis }
+                SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(cal.time)
             }
 
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
-                    value = dateLabel,
+                    value = dataFormatada,
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Data") },
-                    leadingIcon = { Icon(Icons.Rounded.CalendarToday, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Rounded.CalendarToday, null) },
                     modifier = Modifier.fillMaxWidth(),
+                    enabled = false, // Mantemos false para o estilo de "apenas leitura"
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 )
-                Box(modifier = Modifier.matchParentSize().clickable { datePickerOnClick() })
+                // O Box de clique fica por cima do TextField para interceptar o toque
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { showDatePicker = true }
+                )
             }
 
-            // --- 4. SELETOR DE CATEGORIA (Dropdown) ---
+            // --- 4. SELETOR DE CATEGORIA ---
             var expanded by remember { mutableStateOf(false) }
-
-            ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded }
+            ) {
                 OutlinedTextField(
                     readOnly = true,
-                    value = selectedCategory?.nome ?: "Escolha uma categoria",
+                    value = selectedCategory?.nome ?: "Selecione uma categoria",
                     onValueChange = {},
                     modifier = Modifier.fillMaxWidth().menuAnchor(),
                     label = { Text("Categoria") },
                     leadingIcon = { Icon(Icons.Rounded.Category, null) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                    )
+                    shape = RoundedCornerShape(12.dp)
                 )
-                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    listaCategorias.forEach { categoria ->
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    if (listaCategorias.isEmpty()) {
                         DropdownMenuItem(
-                            text = { Text(categoria.nome) },
-                            onClick = {
-                                selectedCategory = categoria
-                                expanded = false
-                            }
+                            text = { Text("Nenhuma categoria cadastrada") },
+                            onClick = { expanded = false }
                         )
+                    } else {
+                        listaCategorias.forEach { categoria ->
+                            DropdownMenuItem(
+                                text = { Text(categoria.nome) },
+                                onClick = {
+                                    selectedCategory = categoria
+                                    expanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }
 
-            // --- 5. CAMPO DESCRIÇÃO ---
+            // --- 5. DESCRIÇÃO ---
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text("Descrição") },
+                label = { Text("Descrição (Opcional)") },
                 leadingIcon = { Icon(Icons.Rounded.Description, null) },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                )
+                shape = RoundedCornerShape(12.dp)
             )
 
             Spacer(modifier = Modifier.weight(1f))
@@ -230,15 +254,15 @@ fun RegistrarScreen(
             Button(
                 enabled = !isSaving,
                 onClick = {
-                    val parsed = amountText.replace(",", ".").toDoubleOrNull()
-                    if (parsed == null || parsed <= 0.0 || selectedCategory == null) {
+                    val valorFinal = if (rawAmountString.isNotEmpty()) rawAmountString.toDouble() / 100 else 0.0
+                    if (valorFinal <= 0.0 || selectedCategory == null) {
                         Toast.makeText(context, "Preencha valor e categoria", Toast.LENGTH_SHORT).show()
                     } else {
                         isSaving = true
                         viewModel.salvarTransacao(
                             tipoTela = tipo,
-                            valor = parsed,
-                            dataMillis = dateMillis,
+                            valor = valorFinal,
+                            dataMillis = datePickerState.selectedDateMillis ?: System.currentTimeMillis(),
                             categoriaId = selectedCategory!!.id,
                             descricao = description,
                             onSuccess = {
@@ -249,22 +273,25 @@ fun RegistrarScreen(
                         )
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp), // Botão mais alto
-                shape = RoundedCornerShape(16.dp), // Bem arredondado
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary, // Verde Emerald
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                if (isSaving) CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
-                else Text(
-                    if (transacaoId > 0L) "Atualizar" else "Salvar",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Text(if (transacaoId > 0L) "Atualizar" else "Salvar", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
+}
+
+// --- FUNÇÃO AUXILIAR ---
+fun formatarMoedaVisual(centavosStr: String): String {
+    if (centavosStr.isEmpty()) return ""
+    val valor = centavosStr.toLongOrNull() ?: 0L
+    val nf = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
+    return nf.format(valor / 100.0)
 }
 
 enum class TipoTela { RECEITA, DESPESA }
