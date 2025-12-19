@@ -20,6 +20,11 @@ import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
+// --- NOVOS IMPORTS PARA A FEATURE PREMIUM ---
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.ui.text.style.TextAlign
+// --------------------------------------------
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -71,8 +76,13 @@ fun HomeScreen(navController: NavController) {
 
     var showBalance by remember { mutableStateOf(true) }
     var showEditNameDialog by remember { mutableStateOf(false) }
+
+    // --- NOVO ESTADO PARA O DIALOG PREMIUM ---
+    var mostrarDialogoPremium by remember { mutableStateOf(false) }
+
     var tempName by remember { mutableStateOf("") }
 
+    // --- DIALOG DE EDITAR NOME ---
     if (showEditNameDialog) {
         AlertDialog(
             onDismissRequest = { showEditNameDialog = false },
@@ -97,10 +107,37 @@ fun HomeScreen(navController: NavController) {
         )
     }
 
+    // --- NOVO DIALOG DE "EM BREVE" ---
+    if (mostrarDialogoPremium) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoPremium = false },
+            icon = { Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(32.dp)) },
+            title = { Text(text = "Funcionalidade Premium", textAlign = TextAlign.Center) },
+            text = {
+                Text(
+                    "Em breve você poderá conectar sua conta do Nubank, Itaú e outros bancos diretamente aqui!\n\nEstamos trabalhando na integração segura via Open Finance.",
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { mostrarDialogoPremium = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Avise-me quando lançar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoPremium = false }) {
+                    Text("Fechar")
+                }
+            }
+        )
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         // MUDANÇA 2: Adicionei o FAB (Botão Flutuante)
-        // Isso facilita criar transações com uma mão só (Ergonomia)
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate(Screen.Registrar.route) },
@@ -211,6 +248,50 @@ fun HomeScreen(navController: NavController) {
             }
 
             // ============================================
+            // 1.5 BANNER PREMIUM (NOVO)
+            // ============================================
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Card(
+                onClick = { mostrarDialogoPremium = true }, // Abre o pop-up
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp), // Alinhado com as margens da tela
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Sincronização Bancária",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Conecte Nubank, Itaú e mais...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.Rounded.Star,
+                        contentDescription = null,
+                        tint = Color(0xFFFFB300) // Dourado
+                    )
+                }
+            }
+
+            // ============================================
             // 2. AÇÕES RÁPIDAS
             // ============================================
             Spacer(modifier = Modifier.height(24.dp))
@@ -224,8 +305,6 @@ fun HomeScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(16.dp))
 
             // MUDANÇA 3: Ajuste dos botões
-            // Removemos "Nova Transação" daqui porque virou FAB.
-            // Mantemos os outros 3 centralizados. Fica mais limpo.
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 ActionButton(Icons.Rounded.History, "Ver\nHistórico") { navController.navigate(Screen.Historico.route) }
                 ActionButton(Icons.Rounded.PieChart, "Resumo\nMensal") { navController.navigate(Screen.Resumo.route) }

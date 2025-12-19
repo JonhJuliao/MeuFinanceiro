@@ -1,22 +1,21 @@
 package com.meufinanceiro.ui.screens
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-// MUDANÇA: Usando Rounded para suavidade
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.List
-import androidx.compose.material.icons.rounded.Add // Para o botão
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip // Importante para arredondar a barra
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -48,7 +47,7 @@ fun CategoriasScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Categorias", fontWeight = FontWeight.Bold) },
+                title = { Text("Metas por Categoria", fontWeight = FontWeight.Bold) }, // Mudei o título para valorizar a feature
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
@@ -78,7 +77,7 @@ fun CategoriasScreen(
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Rounded.List, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp), // Campo mais arredondado
+                shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -105,12 +104,12 @@ fun CategoriasScreen(
             ) {
                 Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Adicionar", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Adicionar Meta", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Lista
+            // Lista com visual novo (Prototipado)
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
@@ -134,33 +133,81 @@ fun CategoriaCard(
     val isDark = isSystemInDarkTheme()
     val primaryColor = MaterialTheme.colorScheme.primary
 
+    // --- SIMULAÇÃO DE DADOS (MOCK) ---
+    // Gerando valores aleatórios para a demonstração visual
+    val meta = 500.00
+    // O 'remember' segura o número aleatório para ele não ficar mudando enquanto você rola a tela
+    val gastoAtual = remember { (50..600).random().toDouble() }
+    val progresso = (gastoAtual / meta).toFloat().coerceIn(0f, 1f)
+
+    // Define a cor: Vermelho se estourou a meta, Primária se está ok
+    val corBarra = if (gastoAtual > meta) MaterialTheme.colorScheme.error else primaryColor
+    val corTextoGasto = if (gastoAtual > meta) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+
     Card(
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        // A Mesma borda Tech da Home
         border = BorderStroke(
             width = 1.dp,
             color = if (isDark) primaryColor.copy(alpha = 0.5f) else Color(0xFFE0E0E0)
         )
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(16.dp).fillMaxWidth()
         ) {
-            Text(
-                text = categoria.nome,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
+            // Linha Superior: Nome e Botão de Excluir
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = categoria.nome,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                    Icon(
+                        Icons.Rounded.Delete,
+                        contentDescription = "Excluir categoria",
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Barra de Progresso Visual
+            LinearProgressIndicator(
+                progress = progresso,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)), // Barra arredondada
+                color = corBarra,
+                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
             )
 
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Rounded.Delete, // Ícone redondo
-                    contentDescription = "Excluir categoria",
-                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Textos de valores (Pequenininho embaixo)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Gasto: R$ ${String.format("%.2f", gastoAtual)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = corTextoGasto,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Meta: R$ ${String.format("%.2f", meta)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
         }

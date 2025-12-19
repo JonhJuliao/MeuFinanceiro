@@ -11,17 +11,33 @@ import com.meufinanceiro.ui.screens.HistoricoScreen
 import com.meufinanceiro.ui.screens.RegistrarScreen
 import com.meufinanceiro.ui.screens.CategoriasScreen
 import com.meufinanceiro.ui.screens.ResumoFinanceiroScreen
+import com.meufinanceiro.ui.screens.OnboardingScreen // <--- Importei a tela nova
 
 // Este Composable é o "Gerente de Tráfego" do aplicativo.
-// Ele decide qual tela deve ser mostrada com base na rota atual.
 @Composable
 fun AppNavHost(navController: NavHostController) {
 
     // NavHost: É um container vazio que vai sendo preenchido pelas telas.
     NavHost(
         navController = navController,
-        startDestination = Screen.Home.route // Define que o app começa na Home
+        // startDestination = Screen.Home.route  <-- ANTIGO
+        startDestination = "onboarding"       // <-- NOVO: Começa pela apresentação
     ) {
+
+        // --- NOVA ROTA: ONBOARDING (BOAS-VINDAS) ---
+        composable("onboarding") {
+            OnboardingScreen(
+                onFinish = {
+                    // Navega para a Home
+                    navController.navigate(Screen.Home.route) {
+                        // TRUQUE PRO: Remove a tela de Onboarding da pilha de voltar.
+                        // Assim, se o usuário clicar "Voltar" na Home, ele sai do app
+                        // e não volta para a tela de tutorial.
+                        popUpTo("onboarding") { inclusive = true }
+                    }
+                }
+            )
+        }
 
         // --- ROTA DA HOME ---
         composable(Screen.Home.route) {
@@ -33,26 +49,19 @@ fun AppNavHost(navController: NavHostController) {
             HistoricoScreen(navController)
         }
 
-        // --- ROTA DE REGISTRAR (A MAIS COMPLEXA) ---
-        // Aqui usamos uma sintaxe parecida com URL de site: "registrar?id={id}"
-        // O "?" indica que o parâmetro 'id' é OPCIONAL.
+        // --- ROTA DE REGISTRAR ---
         composable(
             route = "registrar?id={id}",
             arguments = listOf(
                 navArgument("id") {
-                    type = NavType.LongType // O ID é um número longo (Long)
-                    defaultValue = 0L       // IMPORTANTE: Se não passarmos nada, vale 0 (Novo Cadastro)
+                    type = NavType.LongType
+                    defaultValue = 0L
                 }
             )
         ) { backStackEntry ->
-            // Recupera o ID que veio na navegação
             val id = backStackEntry.arguments?.getLong("id") ?: 0L
-
-            // Passa o ID para a tela.
-            // Se for 0, a tela abre vazia. Se for > 0, a tela carrega os dados para editar.
             RegistrarScreen(navController, transacaoId = id)
         }
-        // -------------------------------------------------
 
         // --- ROTA DE CATEGORIAS ---
         composable(Screen.Categorias.route) {
