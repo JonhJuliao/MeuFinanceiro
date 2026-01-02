@@ -1,5 +1,6 @@
 package com.meufinanceiro.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -14,24 +15,23 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.ListAlt
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.Star
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,13 +45,11 @@ import com.meufinanceiro.backend.repository.TransacaoRepository
 import com.meufinanceiro.navigation.Screen
 import com.meufinanceiro.ui.extensions.categoriaNome
 import com.meufinanceiro.ui.extensions.toCurrency
-import com.meufinanceiro.ui.viewmodel.HomeViewModel
-import com.meufinanceiro.ui.viewmodel.HomeViewModelFactory
+import com.meufinanceiro.ui.theme.AcessibilidadeApp
 import com.meufinanceiro.ui.theme.GradientCyberpunk
 import com.meufinanceiro.ui.theme.GradientLightMode
-import com.meufinanceiro.ui.theme.AcessibilidadeApp
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import com.meufinanceiro.ui.viewmodel.HomeViewModel
+import com.meufinanceiro.ui.viewmodel.HomeViewModelFactory
 
 @Composable
 fun HomeScreen(navController: NavController) {
@@ -74,19 +72,17 @@ fun HomeScreen(navController: NavController) {
     }
 
     var showBalance by remember { mutableStateOf(true) }
-    // Renomeei para ficar mais claro: agora é Configuração de Perfil
     var showProfileSettingsDialog by remember { mutableStateOf(false) }
     var mostrarDialogoPremium by remember { mutableStateOf(false) }
     var tempName by remember { mutableStateOf("") }
 
-    // --- DIALOG DE CONFIGURAÇÕES DO PERFIL (Nome + Acessibilidade) ---
+    // --- DIALOG DE CONFIGURAÇÕES DO PERFIL ---
     if (showProfileSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showProfileSettingsDialog = false },
             title = { Text("Perfil e Configurações") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // Editar Nome
                     OutlinedTextField(
                         value = tempName,
                         onValueChange = { tempName = it },
@@ -97,7 +93,6 @@ fun HomeScreen(navController: NavController) {
 
                     HorizontalDivider()
 
-                    // Switch Acessibilidade (AGORA NO LUGAR CERTO)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -127,7 +122,6 @@ fun HomeScreen(navController: NavController) {
                     if (tempName.isNotBlank()) {
                         viewModel.atualizarNome(tempName)
                     }
-                    // A acessibilidade atualiza sozinha pelo Switch, então só fechamos
                     showProfileSettingsDialog = false
                 }) { Text("Concluir") }
             },
@@ -202,13 +196,13 @@ fun HomeScreen(navController: NavController) {
                         .fillMaxSize(),
                     verticalArrangement = Arrangement.Center
                 ) {
-                    // LINHA 1: Nome e Avatar (AGORA CLICÁVEL PARA SETTINGS)
+                    // LINHA 1: Nome e Avatar
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
                                 tempName = nomeUsuario
-                                showProfileSettingsDialog = true // Abre o novo dialog
+                                showProfileSettingsDialog = true
                             },
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -256,16 +250,19 @@ fun HomeScreen(navController: NavController) {
                             }
                         }
                         Spacer(modifier = Modifier.height(4.dp))
+
+                        // CORREÇÃO: Lógica de cor para saldo negativo
+                        val corSaldo = if (saldo < 0) AcessibilidadeApp.corDespesa else Color.White
+
                         Text(
                             text = if (showBalance) saldo.toCurrency() else "R$ •••••",
-                            color = Color.White,
-                            style = MaterialTheme.typography.displayLarge.copy(fontSize = 36.sp)
+                            color = if (showBalance) corSaldo else Color.White, // Aplica cor só se estiver visível
+                            style = MaterialTheme.typography.displayLarge.copy(fontSize = 36.sp, fontWeight = FontWeight.Bold)
                         )
                     }
                 }
             }
 
-            // ... O RESTO DO ARQUIVO CONTINUA IGUAL (Banner Premium, Ações, Lista) ...
             Spacer(modifier = Modifier.height(24.dp))
 
             // 1.5 BANNER PREMIUM
@@ -406,7 +403,7 @@ fun MiniTransacaoCard(transacao: TransacaoComCategoria) {
             containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
         ),
         shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(
+        border = BorderStroke(
             width = 1.dp,
             color = if (isDark) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f) else Color(0xFFE0E0E0)
         ),

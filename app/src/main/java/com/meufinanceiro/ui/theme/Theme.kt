@@ -105,7 +105,8 @@ fun MeuFinanceiroTheme(
             window.navigationBarColor = colorScheme.background.toArgb()
 
             WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = !darkTheme
+                // CORREÇÃO: Força ícones brancos na barra de status (pois o fundo é sempre verde escuro no topo)
+                isAppearanceLightStatusBars = false
                 isAppearanceLightNavigationBars = !darkTheme
             }
         }
@@ -113,7 +114,7 @@ fun MeuFinanceiroTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = FinanceiroTypography,
+        typography = FinanceiroTypography, // Certifique-se que FinanceiroTypography existe no seu Type.kt
         shapes = FinanceiroShapes,
         content = content
     )

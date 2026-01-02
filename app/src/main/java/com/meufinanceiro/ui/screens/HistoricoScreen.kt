@@ -2,6 +2,7 @@ package com.meufinanceiro.ui.screens
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -306,10 +307,11 @@ fun TransacaoCard(
 
                 // Data e Ícone do Pagamento
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // --- CORREÇÃO AQUI: Usando a função auxiliar ---
                     Icon(
                         imageVector = getIconePagamento(transacao.transacao.metodoPagamento),
                         contentDescription = null,
-                        modifier = Modifier.size(12.dp),
+                        modifier = Modifier.size(14.dp), // Um pouco maior
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
 
@@ -344,13 +346,14 @@ fun TransacaoCard(
     }
 }
 
-// Função auxiliar (Fora da classe ou composable)
+// --- NOVA FUNÇÃO AUXILIAR (No final do arquivo) ---
 @Composable
 fun getIconePagamento(metodo: String): ImageVector {
+    // Mapeia a String do banco para um Ícone Visual
     return when (metodo) {
         "CREDITO", "DEBITO" -> Icons.Rounded.CreditCard
-        "PIX" -> Icons.Rounded.QrCode // Se der erro neste ícone, use Icons.Rounded.PhoneAndroid
+        "PIX" -> Icons.Rounded.QrCode // Use QrCode ou Smartphone se preferir
         "DINHEIRO" -> Icons.Rounded.AttachMoney
-        else -> Icons.Rounded.AttachMoney
+        else -> Icons.Rounded.Payment // Ícone genérico se não achar
     }
 }

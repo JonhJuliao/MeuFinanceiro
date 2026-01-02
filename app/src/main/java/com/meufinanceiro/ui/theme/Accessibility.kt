@@ -5,24 +5,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 
-// Singleton para gerenciar o estado globalmente no App
 object AcessibilidadeApp {
 
-    // Variável que guarda se o modo está ativo ou não
-    // (Num app real, salvaríamos isso no DataStore/SharedPreferences)
     var isModoDaltonicoAtivo by mutableStateOf(false)
 
-    // --- PALETA PADRÃO (Verde/Vermelho) ---
-    private val VerdeReceita = Color(0xFF4CAF50) // Green 500
-    private val VermelhoDespesa = Color(0xFFEF5350) // Red 400
+    // --- MUDANÇA AQUI: Usando as cores do seu tema "Executive Emerald" ---
 
-    // --- PALETA DALTÔNICA (Azul/Laranja - Padrão Universal) ---
-    // Azul é universalmente visível. Laranja oferece alto contraste contra o Azul.
-    private val AzulReceita = Color(0xFF2979FF) // Blue A400 (Vibrante)
-    private val LaranjaDespesa = Color(0xFFFF9100) // Orange A400 (Vibrante)
+    // Agora a receita usa o mesmo verde "Emerald" dos seus botões
+    private val VerdeReceita = ModernGreen // Era 0xFF4CAF50, agora é 0xFF15803D
 
-    // --- GETTERS INTELIGENTES ---
-    // As telas vão chamar APENAS isso aqui. Elas não precisam saber qual modo está ativo.
+    // Vamos usar o vermelho do seu tema Light também
+    private val VermelhoDespesa = LightError // Era 0xFFEF5350, agora é 0xFFDC2626
+
+    // --- MODO DALTÔNICO (MANTIDO) ---
+    private val AzulReceita = Color(0xFF2979FF)
+    private val LaranjaDespesa = Color(0xFFFF9100)
 
     val corReceita: Color
         get() = if (isModoDaltonicoAtivo) AzulReceita else VerdeReceita
