@@ -34,11 +34,11 @@ import com.meufinanceiro.backend.db.AppDatabase
 import com.meufinanceiro.backend.repository.CategoriaRepository
 import com.meufinanceiro.backend.repository.TransacaoRepository
 import com.meufinanceiro.ui.extensions.toCurrency
-import com.meufinanceiro.ui.theme.AcessibilidadeApp // <--- IMPORTANTE: Importar o gerenciador de cores
+import com.meufinanceiro.ui.theme.AcessibilidadeApp
 import com.meufinanceiro.ui.viewmodel.ResumoFinanceiroViewModel
 import com.meufinanceiro.ui.viewmodel.ResumoFinanceiroViewModelFactory
 
-// Modelo visual de dados
+// Mantido aqui conforme seu código original
 data class GastoCategoriaUi(
     val nome: String,
     val valor: Double,
@@ -51,7 +51,6 @@ data class GastoCategoriaUi(
 fun ResumoFinanceiroScreen(navController: NavController) {
     val context = LocalContext.current
 
-    // --- CONEXÃO COM O BANCO DE DADOS REAL ---
     val db = remember { Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build() }
     val transacaoRepo = remember { TransacaoRepository(db.transacaoDao()) }
     val categoriaRepo = remember { CategoriaRepository(db.categoriaDao()) }
@@ -62,21 +61,23 @@ fun ResumoFinanceiroScreen(navController: NavController) {
 
     val state by viewModel.uiState.collectAsState()
 
-    val dadosGrafico = state.listaGastos
+    // --- NOVA LÓGICA DE ABAS ---
+    var abaSelecionada by remember { mutableIntStateOf(0) }
+
+    // Define qual lista mostrar baseada na aba
+    val dadosGrafico = if (abaSelecionada == 0) state.listaPorCategoria else state.listaPorPagamento
     val despesaTotal = state.despesaTotal
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Gastos por Categoria", fontWeight = FontWeight.Bold) },
+                title = { Text("Resumo Mensal", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -88,9 +89,27 @@ fun ResumoFinanceiroScreen(navController: NavController) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
+            // 1. AS ABAS (TABS)
+            TabRow(
+                selectedTabIndex = abaSelecionada,
+                containerColor = MaterialTheme.colorScheme.background,
+                contentColor = MaterialTheme.colorScheme.primary
+            ) {
+                Tab(
+                    selected = abaSelecionada == 0,
+                    onClick = { abaSelecionada = 0 },
+                    text = { Text("Por Categoria") }
+                )
+                Tab(
+                    selected = abaSelecionada == 1,
+                    onClick = { abaSelecionada = 1 },
+                    text = { Text("Por Pagamento") }
+                )
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Empty State
+            // 2. CONTEÚDO (GRÁFICO E LISTA)
             if (dadosGrafico.isEmpty()) {
                 Box(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -111,25 +130,26 @@ fun ResumoFinanceiroScreen(navController: NavController) {
                     }
                 }
             } else {
-                // --- GRÁFICO REAL ---
+                // GRÁFICO
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(240.dp)
                         .semantics(mergeDescendants = true) {
-                            contentDescription = "Gráfico de rosca mostrando despesa total de ${despesaTotal.toCurrency()}."
+                            contentDescription = "Gráfico de rosca mostrando despesa total."
                         }
                 ) {
-                    DonutChartAnimado(dados = dadosGrafico)
+                    // key(abaSelecionada) força a animação reiniciar quando troca a aba
+                    key(abaSelecionada) {
+                        DonutChartAnimado(dados = dadosGrafico)
+                    }
 
-                    // Texto no centro
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "Total Gasto",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
-                        // MUDANÇA: Usando a cor de Despesa (Vermelho/Laranja) para dar destaque semântico
                         Text(
                             text = despesaTotal.toCurrency(),
                             fontSize = 22.sp,
@@ -141,9 +161,9 @@ fun ResumoFinanceiroScreen(navController: NavController) {
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // --- LISTA DE LEGENDAS ---
+                // TÍTULO DA LISTA
                 Text(
-                    text = "Detalhamento",
+                    text = if(abaSelecionada == 0) "Detalhamento por Categoria" else "Detalhamento por Pagamento",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
@@ -167,28 +187,19 @@ fun ResumoFinanceiroScreen(navController: NavController) {
     }
 }
 
+// ... (Mantenha DonutChartAnimado e ItemLegendaGrafico iguais, não mudaram)
 @Composable
-fun DonutChartAnimado(
-    dados: List<GastoCategoriaUi>,
-    espessura: Dp = 30.dp
-) {
+fun DonutChartAnimado(dados: List<GastoCategoriaUi>, espessura: Dp = 30.dp) {
     val animacaoProgresso = remember { Animatable(0f) }
-
     LaunchedEffect(dados) {
         animacaoProgresso.snapTo(0f)
-        animacaoProgresso.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 1000)
-        )
+        animacaoProgresso.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = 1000))
     }
-
     Canvas(modifier = Modifier.size(220.dp)) {
         var anguloInicio = -90f
         val diametro = size.minDimension
-
         dados.forEach { fatia ->
             val anguloVarredura = (fatia.porcentagem * 360f) * animacaoProgresso.value
-
             drawArc(
                 color = fatia.cor,
                 startAngle = anguloInicio,
@@ -211,29 +222,13 @@ fun ItemLegendaGrafico(item: GastoCategoriaUi) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .background(item.cor, CircleShape)
-            )
+            Box(modifier = Modifier.size(12.dp).background(item.cor, CircleShape))
             Spacer(modifier = Modifier.width(12.dp))
             Column {
-                Text(
-                    text = item.nome,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "${(item.porcentagem * 100).toInt()}%",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
+                Text(text = item.nome, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = "${(item.porcentagem * 100).toInt()}%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
             }
         }
-        Text(
-            text = item.valor.toCurrency(),
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Text(text = item.valor.toCurrency(), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
     }
 }

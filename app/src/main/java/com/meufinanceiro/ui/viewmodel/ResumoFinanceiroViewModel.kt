@@ -7,7 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.meufinanceiro.backend.model.TipoTransacao
 import com.meufinanceiro.backend.repository.CategoriaRepository
 import com.meufinanceiro.backend.repository.TransacaoRepository
-import com.meufinanceiro.ui.screens.GastoCategoriaUi
+import com.meufinanceiro.ui.screens.GastoCategoriaUi // Certifique-se que este import está correto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,80 +18,76 @@ class ResumoFinanceiroViewModel(
     private val categoriaRepository: CategoriaRepository
 ) : ViewModel() {
 
-    // Estado da tela (Lista + Total)
-    private val _uiState = MutableStateFlow(ResumoUiState(emptyList(), 0.0))
+    // MUDANÇA 1: O estado inicial agora suporta duas listas
+    private val _uiState = MutableStateFlow(ResumoUiState())
     val uiState: StateFlow<ResumoUiState> = _uiState.asStateFlow()
 
-    // Paleta de cores
     private val coresGrafico = listOf(
-        Color(0xFFEF5350), // Vermelho
-        Color(0xFF42A5F5), // Azul
-        Color(0xFFFFA726), // Laranja
-        Color(0xFF66BB6A), // Verde
-        Color(0xFFAB47BC), // Roxo
-        Color(0xFF26C6DA), // Ciano
-        Color(0xFFFF7043)  // Coral
+        Color(0xFFEF5350), Color(0xFF42A5F5), Color(0xFFFFA726),
+        Color(0xFF66BB6A), Color(0xFFAB47BC), Color(0xFF26C6DA), Color(0xFFFF7043)
     )
 
-    // Bloco que roda assim que o ViewModel nasce
     init {
         carregarDados()
     }
 
-    // Função que vai lá no banco buscar os dados
     fun carregarDados() {
         viewModelScope.launch {
-            // Busca os dados usando os métodos que JÁ EXISTEM no seu Repo
-            val transacoes = transacaoRepository.listarTodas()
+            // Mantendo a correção do listarComCategoria
+            val transacoes = transacaoRepository.listarComCategoria().map { it.transacao }
             val categorias = categoriaRepository.listarTodas()
 
-            // Filtra só despesas
             val despesas = transacoes.filter { it.tipo == TipoTransacao.DESPESA }
-
-            // Calcula total
             val totalGeral = despesas.sumOf { it.valor }
 
             if (totalGeral == 0.0) {
-                _uiState.value = ResumoUiState(emptyList(), 0.0)
+                _uiState.value = ResumoUiState()
                 return@launch
             }
 
-            // Agrupa e calcula
-            val gastosPorCategoria = despesas.groupBy { it.categoriaId }
+            // --- LÓGICA 1: POR CATEGORIA (JÁ EXISTIA) ---
+            val porCategoria = despesas.groupBy { it.categoriaId }
+                .mapNotNull { (catId, lista) ->
+                    val nome = categorias.find { it.id == catId }?.nome ?: "Outros"
+                    val total = lista.sumOf { it.valor }
+                    if (total > 0) {
+                        GastoCategoriaUi(nome, total, Color.Gray, (total / totalGeral).toFloat())
+                    } else null
+                }
+                .sortedByDescending { it.porcentagem }
+                .mapIndexed { i, item -> item.copy(cor = coresGrafico[i % coresGrafico.size]) }
 
-            val dadosGrafico = gastosPorCategoria.mapNotNull { (catId, listaTransacoes) ->
-                val nomeCategoria = categorias.find { it.id == catId }?.nome ?: "Outros"
-                val totalCategoria = listaTransacoes.sumOf { it.valor }
-                val porcentagem = (totalCategoria / totalGeral).toFloat()
+            // --- LÓGICA 2: POR PAGAMENTO (NOVO!) ---
+            val porPagamento = despesas.groupBy { it.metodoPagamento }
+                .mapNotNull { (metodo, lista) ->
+                    // Formata "CREDITO" para "Credito"
+                    val nomeBonito = metodo.lowercase().replaceFirstChar { it.uppercase() }
+                    val total = lista.sumOf { it.valor }
 
-                if (totalCategoria > 0) {
-                    GastoCategoriaUi(
-                        nome = nomeCategoria,
-                        valor = totalCategoria,
-                        porcentagem = porcentagem,
-                        cor = Color.Gray // Será preenchida abaixo
-                    )
-                } else null
-            }.sortedByDescending { it.porcentagem }
+                    if (total > 0) {
+                        GastoCategoriaUi(nomeBonito, total, Color.Gray, (total / totalGeral).toFloat())
+                    } else null
+                }
+                .sortedByDescending { it.porcentagem }
+                .mapIndexed { i, item -> item.copy(cor = coresGrafico[i % coresGrafico.size]) }
 
-            // Aplica cores
-            val listaColorida = dadosGrafico.mapIndexed { index, item ->
-                item.copy(cor = coresGrafico[index % coresGrafico.size])
-            }
-
-            // Atualiza a tela
-            _uiState.value = ResumoUiState(listaColorida, totalGeral)
+            // Atualiza a tela com as duas listas
+            _uiState.value = ResumoUiState(
+                listaPorCategoria = porCategoria,
+                listaPorPagamento = porPagamento,
+                despesaTotal = totalGeral
+            )
         }
     }
 }
 
+// MUDANÇA 2: Atualizei o Data Class do Estado
 data class ResumoUiState(
-    val listaGastos: List<GastoCategoriaUi>,
-    val despesaTotal: Double
+    val listaPorCategoria: List<GastoCategoriaUi> = emptyList(),
+    val listaPorPagamento: List<GastoCategoriaUi> = emptyList(),
+    val despesaTotal: Double = 0.0
 )
 
-// --- A CORREÇÃO ESTÁ AQUI EMBAIXO ---
-// Agora a Factory recebe os Repositories e passa para o ViewModel
 class ResumoFinanceiroViewModelFactory(
     private val transacaoRepository: TransacaoRepository,
     private val categoriaRepository: CategoriaRepository

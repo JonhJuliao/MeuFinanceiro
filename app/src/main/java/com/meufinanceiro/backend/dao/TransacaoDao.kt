@@ -44,5 +44,12 @@ interface TransacaoDao {
         inicio: Long,
         fim: Long
     ): List<TransacaoComCategoria>
-
+    // Busca por descrição (ignorando maiúsculas/minúsculas)
+    @Transaction
+    @Query("""
+        SELECT * FROM transacoes 
+        WHERE descricao LIKE '%' || :query || '%' 
+        ORDER BY dataMillis DESC
+    """)
+    suspend fun buscarPorDescricao(query: String): List<TransacaoComCategoria>
 }

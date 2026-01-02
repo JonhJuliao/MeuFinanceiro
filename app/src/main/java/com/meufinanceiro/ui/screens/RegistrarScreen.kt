@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
@@ -23,6 +25,7 @@ import androidx.navigation.NavController
 import androidx.room.Room
 import com.meufinanceiro.backend.db.AppDatabase
 import com.meufinanceiro.backend.model.Categoria
+import com.meufinanceiro.backend.model.MetodoPagamento // <--- GARANTA QUE O ENUM ESTÁ NO SEU MODEL
 import com.meufinanceiro.backend.model.TipoTransacao
 import com.meufinanceiro.backend.repository.CategoriaRepository
 import com.meufinanceiro.backend.repository.TransacaoRepository
@@ -40,6 +43,7 @@ fun RegistrarScreen(
     transacaoId: Long = 0L
 ) {
     val context = LocalContext.current
+    // Configura o Banco
     val db = remember { Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build() }
 
     val viewModel: RegistrarViewModel = viewModel(
@@ -49,7 +53,7 @@ fun RegistrarScreen(
         )
     )
 
-    // Estados
+    // --- ESTADOS DA TELA ---
     var rawAmountString by remember { mutableStateOf("") }
     var amountTextFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     var description by remember { mutableStateOf("") }
@@ -57,15 +61,20 @@ fun RegistrarScreen(
     var tipo by remember { mutableStateOf(TipoTela.DESPESA) }
     var isSaving by remember { mutableStateOf(false) }
 
+    // NOVO: Estado do Método de Pagamento (Padrão: Dinheiro)
+    var metodoPagamento by remember { mutableStateOf(MetodoPagamento.DINHEIRO) }
+
+    // Data
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
     var showDatePicker by remember { mutableStateOf(false) }
 
-    // Cores Dinâmicas
+    // Cores (Acessibilidade)
     val corReceita = AcessibilidadeApp.corReceita
     val corDespesa = AcessibilidadeApp.corDespesa
     val corAtiva = if (tipo == TipoTela.RECEITA) corReceita else corDespesa
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
 
-    // Carregar Edição
+    // --- CARREGAR DADOS (Se for Edição) ---
     LaunchedEffect(transacaoId) {
         if (transacaoId > 0) {
             viewModel.carregarDadosParaEdicao(transacaoId) { transacao, categoria ->
@@ -76,12 +85,20 @@ fun RegistrarScreen(
                 datePickerState.selectedDateMillis = transacao.dataMillis
                 selectedCategory = categoria
                 tipo = if (transacao.tipo == TipoTransacao.RECEITA) TipoTela.RECEITA else TipoTela.DESPESA
+
+                // Tenta carregar o método de pagamento salvo
+                metodoPagamento = try {
+                    MetodoPagamento.valueOf(transacao.metodoPagamento)
+                } catch (e: Exception) {
+                    MetodoPagamento.DINHEIRO
+                }
             }
         }
     }
 
     val listaCategorias by viewModel.categorias.collectAsState()
 
+    // Dialog da Data
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -93,13 +110,12 @@ fun RegistrarScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (transacaoId > 0L) "Editar" else "Nova Transação", fontWeight = FontWeight.Bold) },
+                title = { Text(if (transacaoId > 0L) "Editar Transação" else "Nova Transação", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
                     }
                 }
-                // REMOVI O SWITCH DAQUI. TELA LIMPA AGORA.
             )
         }
     ) { innerPadding ->
@@ -111,7 +127,7 @@ fun RegistrarScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
 
-            // 1. TIPO
+            // 1. SELETOR DE TIPO (Receita / Despesa)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilterChip(
                     selected = tipo == TipoTela.RECEITA,
@@ -140,7 +156,7 @@ fun RegistrarScreen(
                 )
             }
 
-            // 2. VALOR
+            // 2. CAMPO VALOR
             OutlinedTextField(
                 value = amountTextFieldValue,
                 onValueChange = { novoValor ->
@@ -162,13 +178,55 @@ fun RegistrarScreen(
                     fontWeight = FontWeight.Bold,
                     color = corAtiva
                 ),
+                // --- CORREÇÃO FUNDO ROSA ---
                 colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
+                    unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
                     focusedBorderColor = corAtiva,
                     focusedLabelColor = corAtiva
                 )
             )
 
-            // 3. DATA
+            // 3. SELETOR DE FORMA DE PAGAMENTO (NOVO!)
+            // Aqui está onde você escolhe se foi Dinheiro, Cartão, etc.
+            Column {
+                Text(
+                    text = "Forma de Pagamento",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Lista os itens do Enum
+                    val opcoes = MetodoPagamento.values()
+                    items(opcoes.size) { index ->
+                        val metodo = opcoes[index]
+                        val isSelected = metodoPagamento == metodo
+
+                        // Nome bonito para exibir (Ex: CREDITO -> Crédito)
+                        val label = metodo.name.lowercase().replaceFirstChar { it.uppercase() }
+
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { metodoPagamento = metodo },
+                            label = { Text(label) },
+                            leadingIcon = {
+                                if (isSelected) Icon(Icons.Rounded.Check, null)
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 4. CAMPO DATA
             val dataFormatada = remember(datePickerState.selectedDateMillis) {
                 val millis = datePickerState.selectedDateMillis
                 if (millis != null) {
@@ -192,7 +250,9 @@ fun RegistrarScreen(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = false,
                     shape = RoundedCornerShape(12.dp),
+                    // --- CORREÇÃO FUNDO ROSA ---
                     colors = OutlinedTextFieldDefaults.colors(
+                        disabledContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
                         disabledTextColor = MaterialTheme.colorScheme.onSurface,
                         disabledBorderColor = MaterialTheme.colorScheme.outline,
                         disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -205,7 +265,7 @@ fun RegistrarScreen(
                 ) { showDatePicker = true })
             }
 
-            // 4. CATEGORIA
+            // 5. CATEGORIA
             var expanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
                 OutlinedTextField(
@@ -216,11 +276,16 @@ fun RegistrarScreen(
                     label = { Text("Categoria") },
                     leadingIcon = { Icon(Icons.Rounded.Category, null) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    // --- CORREÇÃO FUNDO ROSA ---
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
+                        unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
+                    )
                 )
                 ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     if (listaCategorias.isEmpty()) {
-                        DropdownMenuItem(text = { Text("Sem categorias") }, onClick = { expanded = false })
+                        DropdownMenuItem(text = { Text("Sem categorias cadastradas") }, onClick = { expanded = false })
                     } else {
                         listaCategorias.forEach { categoria ->
                             DropdownMenuItem(text = { Text(categoria.nome) }, onClick = { selectedCategory = categoria; expanded = false })
@@ -229,19 +294,24 @@ fun RegistrarScreen(
                 }
             }
 
-            // 5. DESCRIÇÃO
+            // 6. DESCRIÇÃO
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
                 label = { Text("Descrição (Opcional)") },
                 leadingIcon = { Icon(Icons.Rounded.Description, null) },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                // --- CORREÇÃO FUNDO ROSA ---
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
+                    unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
+                )
             )
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // 6. BOTÃO SALVAR
+            // 7. BOTÃO SALVAR
             Button(
                 enabled = !isSaving,
                 onClick = {
@@ -256,6 +326,8 @@ fun RegistrarScreen(
                             dataMillis = datePickerState.selectedDateMillis ?: System.currentTimeMillis(),
                             categoriaId = selectedCategory!!.id,
                             descricao = description,
+                            // PASSANDO O MÉTODO SELECIONADO
+                            metodoPagamento = metodoPagamento.name,
                             onSuccess = { Toast.makeText(context, "Salvo!", Toast.LENGTH_SHORT).show(); navController.popBackStack() },
                             onError = { isSaving = false }
                         )
@@ -272,6 +344,7 @@ fun RegistrarScreen(
     }
 }
 
+// Utilitários
 fun formatarMoedaVisual(centavosStr: String): String {
     if (centavosStr.isEmpty()) return ""
     val valor = centavosStr.toLongOrNull() ?: 0L

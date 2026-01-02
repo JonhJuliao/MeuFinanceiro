@@ -9,7 +9,9 @@ class ResumoFinanceiroService(
 ) {
 
     suspend fun calcularResumo(): ResumoFinanceiro {
-        val transacoes = transacaoRepository.listarTodas()
+        val transacoesComCategoria = transacaoRepository.listarComCategoria()
+
+        val transacoes = transacoesComCategoria.map { it.transacao }
 
         val totalReceitas = transacoes
             .filter { it.tipo == TipoTransacao.RECEITA }
