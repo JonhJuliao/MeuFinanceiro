@@ -46,6 +46,7 @@ import java.util.Calendar
 fun HistoricoScreen(navController: NavController) {
 
     val context = LocalContext.current
+    val isDark = isSystemInDarkTheme()
 
     val db = remember {
         Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build()
@@ -82,11 +83,12 @@ fun HistoricoScreen(navController: NavController) {
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = if (isDark) MaterialTheme.colorScheme.background else Color(0xFFFAFAFA)
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        // Correção de Fundo (Para bater com a Home)
+        containerColor = if (isDark) MaterialTheme.colorScheme.background else Color(0xFFFAFAFA)
     ) { padding ->
 
         Column(
@@ -103,8 +105,8 @@ fun HistoricoScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    // Usa a cor "Surface" (Preto/Branco) com borda fina
-                    containerColor = MaterialTheme.colorScheme.surface
+                    // CORREÇÃO: Forçando cor neutra para evitar erros de tema
+                    containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
                 ),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
             ) {
@@ -113,7 +115,12 @@ fun HistoricoScreen(navController: NavController) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.FilterList, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "Filtrar por período", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(
+                            text = "Filtrar por período",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -124,8 +131,10 @@ fun HistoricoScreen(navController: NavController) {
                             modifier = Modifier.weight(1f),
                             onClick = { showDatePicker { dataInicio = it } },
                             colors = ButtonDefaults.buttonColors(
+                                // Se tem data: Verde (Primary). Se não: Cinza (SurfaceVariant)
                                 containerColor = if(dataInicio != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if(dataInicio != null) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                // Se tem data: Branco (OnPrimary). Se não: Preto/Cinza (OnSurfaceVariant)
+                                contentColor = if(dataInicio != null) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
                             shape = RoundedCornerShape(12.dp)
                         ) {
@@ -139,7 +148,7 @@ fun HistoricoScreen(navController: NavController) {
                             onClick = { showDatePicker { dataFim = it } },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if(dataFim != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if(dataFim != null) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                contentColor = if(dataFim != null) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
                             shape = RoundedCornerShape(12.dp)
                         ) {
@@ -173,7 +182,10 @@ fun HistoricoScreen(navController: NavController) {
                                 dataFim = null
                                 viewModel.limparFiltro()
                             },
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
                         ) {
                             Text("Limpar")
                         }
@@ -240,11 +252,10 @@ fun TransacaoCard(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            // Fundo sólido limpo
-            containerColor = MaterialTheme.colorScheme.surface
+            // CORREÇÃO: Forçando Branco no modo claro para contraste perfeito
+            containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
         ),
         // A BORDA COLORIDA (O Toque Especial):
-        // Se for Despesa, borda vermelha suave. Se Receita, verde suave.
         border = BorderStroke(
             width = 1.dp,
             color = if (isDark) color.copy(alpha = 0.3f) else Color(0xFFE0E0E0)
@@ -312,7 +323,7 @@ fun TransacaoCard(
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Rounded.Delete,
-                        contentDescription = "Excluir",
+                        contentDescription = "Excluir transação", // Melhor Acessibilidade
                         tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
                         modifier = Modifier.size(20.dp)
                     )

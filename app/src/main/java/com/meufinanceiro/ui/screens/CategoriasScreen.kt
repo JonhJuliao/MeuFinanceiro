@@ -133,12 +133,10 @@ fun CategoriaCard(
     val isDark = isSystemInDarkTheme()
     val primaryColor = MaterialTheme.colorScheme.primary
 
-    // --- SIMULAÇÃO DE DADOS (MOCK) ---
-    // Gerando valores aleatórios para a demonstração visual
-    val meta = 500.00
-    // O 'remember' segura o número aleatório para ele não ficar mudando enquanto você rola a tela
-    val gastoAtual = remember { (50..600).random().toDouble() }
-    val progresso = (gastoAtual / meta).toFloat().coerceIn(0f, 1f)
+
+    val meta = 0.00
+    val gastoAtual = 0.00
+    val progresso = 0f
 
     // Define a cor: Vermelho se estourou a meta, Primária se está ok
     val corBarra = if (gastoAtual > meta) MaterialTheme.colorScheme.error else primaryColor
