@@ -9,7 +9,7 @@ data class TransacaoComCategoria(
     val transacao: Transacao,
 
     @Relation(
-        parentColumn = "categoria_id",
+        parentColumn = "categoriaId", // <--- MUDANÇA AQUI (Era "categoria_id")
         entityColumn = "id"
     )
     val categoria: Categoria

@@ -9,7 +9,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-// MUDANÇA 1: Usando ícones arredondados (Mais moderno/suave)
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
@@ -20,15 +19,14 @@ import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
-// --- NOVOS IMPORTS PARA A FEATURE PREMIUM ---
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.ui.text.style.TextAlign
-// --------------------------------------------
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -51,6 +49,7 @@ import com.meufinanceiro.ui.viewmodel.HomeViewModel
 import com.meufinanceiro.ui.viewmodel.HomeViewModelFactory
 import com.meufinanceiro.ui.theme.GradientCyberpunk
 import com.meufinanceiro.ui.theme.GradientLightMode
+import com.meufinanceiro.ui.theme.AcessibilidadeApp
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 
@@ -75,39 +74,69 @@ fun HomeScreen(navController: NavController) {
     }
 
     var showBalance by remember { mutableStateOf(true) }
-    var showEditNameDialog by remember { mutableStateOf(false) }
-
-    // --- NOVO ESTADO PARA O DIALOG PREMIUM ---
+    // Renomeei para ficar mais claro: agora é Configuração de Perfil
+    var showProfileSettingsDialog by remember { mutableStateOf(false) }
     var mostrarDialogoPremium by remember { mutableStateOf(false) }
-
     var tempName by remember { mutableStateOf("") }
 
-    // --- DIALOG DE EDITAR NOME ---
-    if (showEditNameDialog) {
+    // --- DIALOG DE CONFIGURAÇÕES DO PERFIL (Nome + Acessibilidade) ---
+    if (showProfileSettingsDialog) {
         AlertDialog(
-            onDismissRequest = { showEditNameDialog = false },
-            title = { Text("Como você quer ser chamado?") },
+            onDismissRequest = { showProfileSettingsDialog = false },
+            title = { Text("Perfil e Configurações") },
             text = {
-                OutlinedTextField(
-                    value = tempName,
-                    onValueChange = { tempName = it },
-                    label = { Text("Seu nome") },
-                    singleLine = true
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Editar Nome
+                    OutlinedTextField(
+                        value = tempName,
+                        onValueChange = { tempName = it },
+                        label = { Text("Seu nome") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    HorizontalDivider()
+
+                    // Switch Acessibilidade (AGORA NO LUGAR CERTO)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Modo Daltônico",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Ajusta cores para melhor visibilidade (Azul/Laranja)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray
+                            )
+                        }
+                        Switch(
+                            checked = AcessibilidadeApp.isModoDaltonicoAtivo,
+                            onCheckedChange = { AcessibilidadeApp.isModoDaltonicoAtivo = it }
+                        )
+                    }
+                }
             },
             confirmButton = {
-                TextButton(onClick = {
+                Button(onClick = {
                     if (tempName.isNotBlank()) {
                         viewModel.atualizarNome(tempName)
-                        showEditNameDialog = false
                     }
-                }) { Text("Salvar") }
+                    // A acessibilidade atualiza sozinha pelo Switch, então só fechamos
+                    showProfileSettingsDialog = false
+                }) { Text("Concluir") }
             },
-            dismissButton = { TextButton(onClick = { showEditNameDialog = false }) { Text("Cancelar") } }
+            dismissButton = {
+                TextButton(onClick = { showProfileSettingsDialog = false }) { Text("Fechar") }
+            }
         )
     }
 
-    // --- NOVO DIALOG DE "EM BREVE" ---
     if (mostrarDialogoPremium) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoPremium = false },
@@ -136,10 +165,7 @@ fun HomeScreen(navController: NavController) {
     }
 
     Scaffold(
-        // CORREÇÃO: Usando Branco Gelo (FAFAFA) para evitar o fundo rosado do Material 3
         containerColor = if (isDark) MaterialTheme.colorScheme.background else Color(0xFFFAFAFA),
-
-        // MUDANÇA 2: Adicionei o FAB (Botão Flutuante)
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate(Screen.Registrar.route) },
@@ -158,9 +184,7 @@ fun HomeScreen(navController: NavController) {
                 .verticalScroll(rememberScrollState())
         ) {
 
-            // ============================================
             // 1. HERO CARD
-            // ============================================
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -178,21 +202,19 @@ fun HomeScreen(navController: NavController) {
                         .fillMaxSize(),
                     verticalArrangement = Arrangement.Center
                 ) {
-
-                    // LINHA 1: Nome e Avatar
+                    // LINHA 1: Nome e Avatar (AGORA CLICÁVEL PARA SETTINGS)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
                                 tempName = nomeUsuario
-                                showEditNameDialog = true
+                                showProfileSettingsDialog = true // Abre o novo dialog
                             },
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(text = "Olá,", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
-
                             Text(
                                 text = nomeUsuario,
                                 color = Color.White,
@@ -202,19 +224,16 @@ fun HomeScreen(navController: NavController) {
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-
                         Spacer(modifier = Modifier.width(16.dp))
-
                         Surface(
                             shape = CircleShape,
                             color = Color.White.copy(alpha = 0.2f),
                             modifier = Modifier.size(40.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                // Ícone arredondado
                                 Icon(
                                     imageVector = Icons.Rounded.Person,
-                                    contentDescription = "Perfil",
+                                    contentDescription = "Perfil e Configurações",
                                     tint = Color.White
                                 )
                             }
@@ -228,7 +247,6 @@ fun HomeScreen(navController: NavController) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(text = "Seu saldo total", color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
                             Spacer(modifier = Modifier.width(8.dp))
-
                             IconButton(onClick = { showBalance = !showBalance }, modifier = Modifier.size(24.dp)) {
                                 Icon(
                                     imageVector = if (showBalance) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
@@ -237,9 +255,7 @@ fun HomeScreen(navController: NavController) {
                                 )
                             }
                         }
-
                         Spacer(modifier = Modifier.height(4.dp))
-
                         Text(
                             text = if (showBalance) saldo.toCurrency() else "R$ •••••",
                             color = Color.White,
@@ -249,26 +265,20 @@ fun HomeScreen(navController: NavController) {
                 }
             }
 
-            // ============================================
-            // 1.5 BANNER PREMIUM (NOVO)
-            // ============================================
+            // ... O RESTO DO ARQUIVO CONTINUA IGUAL (Banner Premium, Ações, Lista) ...
             Spacer(modifier = Modifier.height(24.dp))
 
+            // 1.5 BANNER PREMIUM
             Card(
-                onClick = { mostrarDialogoPremium = true }, // Abre o pop-up
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp), // Alinhado com as margens da tela
+                onClick = { mostrarDialogoPremium = true },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                 colors = CardDefaults.cardColors(
-                    // CORREÇÃO: Usando Cinza Claro (F5F5F5) em vez de surfaceVariant (que é rosado)
                     containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF5F5F5)
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Row(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth(),
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -285,18 +295,15 @@ fun HomeScreen(navController: NavController) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-
                     Icon(
                         imageVector = Icons.Rounded.Star,
                         contentDescription = null,
-                        tint = Color(0xFFFFB300) // Dourado
+                        tint = Color(0xFFFFB300)
                     )
                 }
             }
 
-            // ============================================
             // 2. AÇÕES RÁPIDAS
-            // ============================================
             Spacer(modifier = Modifier.height(24.dp))
             Text(
                 text = "Ações Rápidas",
@@ -307,25 +314,20 @@ fun HomeScreen(navController: NavController) {
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // MUDANÇA 3: Ajuste dos botões
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 ActionButton(Icons.Rounded.History, "Ver\nHistórico") { navController.navigate(Screen.Historico.route) }
                 ActionButton(Icons.Rounded.PieChart, "Resumo\nMensal") { navController.navigate(Screen.Resumo.route) }
                 ActionButton(Icons.Rounded.Settings, "Categorias") { navController.navigate(Screen.Categorias.route) }
             }
 
-            // ============================================
             // 3. ÚLTIMAS MOVIMENTAÇÕES
-            // ============================================
             Spacer(modifier = Modifier.height(24.dp))
-
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(text = "Últimas Movimentações", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-
                 TextButton(onClick = { navController.navigate(Screen.Historico.route) }) {
                     Text("Ver todas")
                 }
@@ -334,7 +336,6 @@ fun HomeScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(8.dp))
 
             if (ultimasTransacoes.isEmpty()) {
-                // MUDANÇA 4: Empty State Bonito (Ícone + Texto)
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -359,8 +360,6 @@ fun HomeScreen(navController: NavController) {
                     }
                 }
             }
-
-            // Espaço extra no fim para o FAB não cobrir o último item
             Spacer(modifier = Modifier.height(80.dp))
         }
     }
@@ -378,7 +377,7 @@ fun ActionButton(icon: ImageVector, label: String, onClick: () -> Unit) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = label,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(28.dp)
                 )
@@ -398,24 +397,18 @@ fun ActionButton(icon: ImageVector, label: String, onClick: () -> Unit) {
 @Composable
 fun MiniTransacaoCard(transacao: TransacaoComCategoria) {
     val isReceita = transacao.transacao.tipo == TipoTransacao.RECEITA
-    // Ícones arredondados
     val icon = if (isReceita) Icons.Rounded.ArrowUpward else Icons.Rounded.ArrowDownward
-
-    val color = if (isReceita) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+    val color = if (isReceita) AcessibilidadeApp.corReceita else AcessibilidadeApp.corDespesa
     val isDark = isSystemInDarkTheme()
 
     Card(
         colors = CardDefaults.cardColors(
-            // CORREÇÃO: Usando Branco Puro para contraste limpo
             containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
         ),
         shape = RoundedCornerShape(12.dp),
         border = androidx.compose.foundation.BorderStroke(
             width = 1.dp,
-            color = if (isDark)
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-            else
-                Color(0xFFE0E0E0)
+            color = if (isDark) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f) else Color(0xFFE0E0E0)
         ),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
     ) {
@@ -433,7 +426,6 @@ fun MiniTransacaoCard(transacao: TransacaoComCategoria) {
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(text = transacao.categoriaNome, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-
                     Text(
                         text = transacao.transacao.descricao?.takeIf { it.isNotBlank() } ?: "Sem descrição",
                         fontSize = 12.sp,

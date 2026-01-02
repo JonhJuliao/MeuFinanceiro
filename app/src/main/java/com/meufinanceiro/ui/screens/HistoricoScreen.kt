@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-// MUDANÇA: Ícones Rounded
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
@@ -37,6 +36,7 @@ import com.meufinanceiro.backend.repository.TransacaoRepository
 import com.meufinanceiro.ui.extensions.categoriaNome
 import com.meufinanceiro.ui.extensions.toCurrency
 import com.meufinanceiro.ui.extensions.toDateFormat
+import com.meufinanceiro.ui.theme.AcessibilidadeApp // <--- IMPORTANTE
 import com.meufinanceiro.ui.viewmodel.HistoricoFactory
 import com.meufinanceiro.ui.viewmodel.HistoricoViewModel
 import java.util.Calendar
@@ -87,7 +87,6 @@ fun HistoricoScreen(navController: NavController) {
                 )
             )
         },
-        // Correção de Fundo (Para bater com a Home)
         containerColor = if (isDark) MaterialTheme.colorScheme.background else Color(0xFFFAFAFA)
     ) { padding ->
 
@@ -98,14 +97,11 @@ fun HistoricoScreen(navController: NavController) {
                 .fillMaxSize()
         ) {
 
-            // ==========================================
-            // SEÇÃO 1: FILTRO (Visual Tech Clean)
-            // ==========================================
+            // SEÇÃO 1: FILTRO (Mantido igual, apenas garantindo imports)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    // CORREÇÃO: Forçando cor neutra para evitar erros de tema
                     containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
                 ),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
@@ -125,15 +121,12 @@ fun HistoricoScreen(navController: NavController) {
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Botões de Data
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             modifier = Modifier.weight(1f),
                             onClick = { showDatePicker { dataInicio = it } },
                             colors = ButtonDefaults.buttonColors(
-                                // Se tem data: Verde (Primary). Se não: Cinza (SurfaceVariant)
                                 containerColor = if(dataInicio != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                // Se tem data: Branco (OnPrimary). Se não: Preto/Cinza (OnSurfaceVariant)
                                 contentColor = if(dataInicio != null) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
                             shape = RoundedCornerShape(12.dp)
@@ -160,7 +153,6 @@ fun HistoricoScreen(navController: NavController) {
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Botões de Ação
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             modifier = Modifier.weight(1f),
@@ -195,9 +187,7 @@ fun HistoricoScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ==========================================
-            // SEÇÃO 2: LISTA (Visual Polido)
-            // ==========================================
+            // SEÇÃO 2: LISTA
             if (lista.isEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -232,9 +222,6 @@ fun HistoricoScreen(navController: NavController) {
     }
 }
 
-// ==========================================
-// CARD COM VISUAL TECH (Borda Colorida)
-// ==========================================
 @Composable
 fun TransacaoCard(
     transacao: TransacaoComCategoria,
@@ -244,18 +231,16 @@ fun TransacaoCard(
     val isReceita = transacao.transacao.tipo == TipoTransacao.RECEITA
     val isDark = isSystemInDarkTheme()
 
-    // Define cor baseado no tipo
-    val color = if (isReceita) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+    // --- CORREÇÃO GLOBAL: Usando as cores inteligentes ---
+    val color = if (isReceita) AcessibilidadeApp.corReceita else AcessibilidadeApp.corDespesa
     val icon = if (isReceita) Icons.Rounded.ArrowUpward else Icons.Rounded.ArrowDownward
 
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            // CORREÇÃO: Forçando Branco no modo claro para contraste perfeito
             containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
         ),
-        // A BORDA COLORIDA (O Toque Especial):
         border = BorderStroke(
             width = 1.dp,
             color = if (isDark) color.copy(alpha = 0.3f) else Color(0xFFE0E0E0)
@@ -269,7 +254,6 @@ fun TransacaoCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
 
-            // Ícone circular
             Surface(
                 shape = CircleShape,
                 color = color.copy(alpha = 0.1f),
@@ -287,7 +271,6 @@ fun TransacaoCard(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Textos
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = transacao.categoriaNome,
@@ -312,18 +295,17 @@ fun TransacaoCard(
                 )
             }
 
-            // Valor e Delete
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = transacao.transacao.valor.toCurrency(),
-                    color = color,
+                    color = color, // Agora usa a cor daltônica
                     fontWeight = FontWeight.Bold
                 )
 
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Rounded.Delete,
-                        contentDescription = "Excluir transação", // Melhor Acessibilidade
+                        contentDescription = "Excluir transação",
                         tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
                         modifier = Modifier.size(20.dp)
                     )
