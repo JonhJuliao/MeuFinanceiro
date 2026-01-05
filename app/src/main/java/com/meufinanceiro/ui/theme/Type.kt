@@ -1,15 +1,14 @@
 package com.meufinanceiro.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.*
 import androidx.compose.ui.unit.sp
 import com.meufinanceiro.R
 
-// 1. FONTE
-val interFontFamily = FontFamily(
+// ---------- FONT ----------
+val InterFontFamily = FontFamily(
     Font(R.font.inter_regular, FontWeight.Normal),
     Font(R.font.inter_medium, FontWeight.Medium),
     Font(R.font.inter_semibold, FontWeight.SemiBold),
@@ -17,44 +16,37 @@ val interFontFamily = FontFamily(
     Font(R.font.inter_extrabold, FontWeight.ExtraBold)
 )
 
-// 2. ESTILO NUMÉRICO
-val techTextStyle = TextStyle(
-    fontFamily = interFontFamily,
+// ---------- BASE STYLE ----------
+private val BaseTextStyle = TextStyle(
+    fontFamily = InterFontFamily,
     fontFeatureSettings = "tnum"
 )
 
-// 3. VARIÁVEL DE TIPOGRAFIA (O Theme.kt procura por ISSO)
-val FinanceiroTypography = Typography( // <--- NOME IMPORTANTE
-    displayLarge = techTextStyle.copy(
+// ---------- TYPOGRAPHY ----------
+val FinanceiroTypography = Typography(
+    displayLarge = BaseTextStyle.copy(
         fontWeight = FontWeight.ExtraBold,
         fontSize = 40.sp,
-        lineHeight = 48.sp,
-        letterSpacing = (-1).sp
+        lineHeight = 48.sp
     ),
-    displayMedium = techTextStyle.copy(
+    displayMedium = BaseTextStyle.copy(
         fontWeight = FontWeight.Bold,
-        fontSize = 32.sp,
-        lineHeight = 40.sp
+        fontSize = 32.sp
     ),
-    titleMedium = techTextStyle.copy(
+    titleMedium = BaseTextStyle.copy(
         fontWeight = FontWeight.SemiBold,
-        fontSize = 18.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
+        fontSize = 18.sp
     ),
-    bodyLarge = techTextStyle.copy(
-        fontWeight = FontWeight.Normal,
+    bodyLarge = BaseTextStyle.copy(
         fontSize = 16.sp,
         lineHeight = 24.sp
     ),
-    bodySmall = techTextStyle.copy(
-        fontWeight = FontWeight.Medium,
+    bodySmall = BaseTextStyle.copy(
         fontSize = 12.sp,
-        color = androidx.compose.ui.graphics.Color.Gray
+        color = Color.Gray
     ),
-    labelLarge = techTextStyle.copy(
+    labelLarge = BaseTextStyle.copy(
         fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
-        letterSpacing = 0.1.sp
+        fontSize = 14.sp
     )
 )

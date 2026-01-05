@@ -1,9 +1,11 @@
 package com.meufinanceiro.ui.screens
 
 import android.app.DatePickerDialog
-import androidx.compose.foundation.BorderStroke
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -32,30 +35,31 @@ import com.meufinanceiro.backend.repository.TransacaoRepository
 import com.meufinanceiro.ui.extensions.categoriaNome
 import com.meufinanceiro.ui.extensions.toCurrency
 import com.meufinanceiro.ui.extensions.toDateFormat
-import com.meufinanceiro.ui.theme.AcessibilidadeApp
 import com.meufinanceiro.ui.viewmodel.HistoricoFactory
 import com.meufinanceiro.ui.viewmodel.HistoricoViewModel
 import java.util.Calendar
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoricoScreen(navController: NavController) {
-
     val context = LocalContext.current
-    val isDark = isSystemInDarkTheme()
+    val colors = MaterialTheme.colorScheme // Puxa as cores do Theme.kt
 
     val db = remember {
         Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db")
-            .addMigrations(AppDatabase.MIGRATION_1_2) // <--- OBRIGATÓRIO TER ISSO
+            .addMigrations(AppDatabase.MIGRATION_1_2)
             .build()
     }
     val repository = remember { TransacaoRepository(db.transacaoDao()) }
     val viewModel: HistoricoViewModel = viewModel(factory = HistoricoFactory(repository))
 
     val lista by viewModel.transacoes.collectAsState()
-
     var dataInicio by remember { mutableStateOf<Long?>(null) }
     var dataFim by remember { mutableStateOf<Long?>(null) }
+    var isFiltroExpandido by remember { mutableStateOf(false) }
 
     fun showDatePicker(onDateSelected: (Long) -> Unit) {
         val calendar = Calendar.getInstance()
@@ -74,131 +78,102 @@ fun HistoricoScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Histórico", fontWeight = FontWeight.Bold) },
+                title = { Text("Histórico", fontWeight = FontWeight.Bold, color = colors.onBackground) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
+                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar", tint = colors.onBackground)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (isDark) MaterialTheme.colorScheme.background else Color(0xFFFAFAFA)
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background)
             )
         },
-        containerColor = if (isDark) MaterialTheme.colorScheme.background else Color(0xFFFAFAFA)
+        containerColor = colors.background // CyberBlack no Dark Mode
     ) { padding ->
 
         Column(
             modifier = Modifier
                 .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(horizontal = 16.dp)
                 .fillMaxSize()
         ) {
 
-            // SEÇÃO 1: FILTRO E BUSCA
+            // CARD DE FILTROS
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = colors.surface), // CyberSurface
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                elevation = CardDefaults.cardElevation(0.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-
-                    // BARRA DE PESQUISA
                     var textoBusca by remember { mutableStateOf("") }
-
                     OutlinedTextField(
                         value = textoBusca,
-                        onValueChange = {
-                            textoBusca = it
-                            viewModel.filtrarPorTexto(it)
-                        },
-                        placeholder = { Text("Buscar (Ex: Uber, Lanche)") },
-                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                        onValueChange = { textoBusca = it; viewModel.filtrarPorTexto(it) },
+                        placeholder = { Text("Buscar...", color = colors.onSurfaceVariant) },
+                        leadingIcon = { Icon(Icons.Rounded.Search, null, tint = colors.primary) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
-                            unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
+                            focusedContainerColor = colors.background,
+                            unfocusedContainerColor = colors.background,
+                            focusedTextColor = colors.onSurface,
+                            unfocusedTextColor = colors.onSurface,
+                            cursorColor = colors.primary,
+                            focusedBorderColor = colors.primary,
+                            unfocusedBorderColor = colors.outline
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.FilterList, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Filtrar por período",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { isFiltroExpandido = !isFiltroExpandido }.padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.FilterList, null, tint = colors.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Filtros de Data", fontWeight = FontWeight.Bold, color = colors.primary)
+                        }
+                        Icon(if(isFiltroExpandido) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, null, tint = colors.onSurfaceVariant)
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    AnimatedVisibility(visible = isFiltroExpandido) {
+                        Column {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { showDatePicker { dataInicio = it } },
+                                    colors = ButtonDefaults.buttonColors(containerColor = colors.background, contentColor = colors.onBackground),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) { Text(dataInicio?.toDateFormat() ?: "Início", fontSize = 12.sp) }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            modifier = Modifier.weight(1f),
-                            onClick = { showDatePicker { dataInicio = it } },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if(dataInicio != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if(dataInicio != null) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.CalendarToday, null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(dataInicio?.toDateFormat() ?: "Início", fontSize = 12.sp)
-                        }
-
-                        Button(
-                            modifier = Modifier.weight(1f),
-                            onClick = { showDatePicker { dataFim = it } },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if(dataFim != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if(dataFim != null) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.CalendarToday, null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(dataFim?.toDateFormat() ?: "Fim", fontSize = 12.sp)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            modifier = Modifier.weight(1f),
-                            enabled = dataInicio != null && dataFim != null,
-                            onClick = { viewModel.filtrarPorPeriodo(dataInicio!!, dataFim!!) },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                            )
-                        ) {
-                            Text("Filtrar")
-                        }
-
-                        OutlinedButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                dataInicio = null
-                                dataFim = null
-                                viewModel.limparFiltro()
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            )
-                        ) {
-                            Text("Limpar")
+                                Button(
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { showDatePicker { dataFim = it } },
+                                    colors = ButtonDefaults.buttonColors(containerColor = colors.background, contentColor = colors.onBackground),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) { Text(dataFim?.toDateFormat() ?: "Fim", fontSize = 12.sp) }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row {
+                                Button(
+                                    onClick = { viewModel.filtrarPorPeriodo(dataInicio!!, dataFim!!) },
+                                    enabled = dataInicio != null && dataFim != null,
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary)
+                                ) { Text("Aplicar") }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                OutlinedButton(
+                                    onClick = { dataInicio = null; dataFim = null; viewModel.limparFiltro() },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.onSurface)
+                                ) { Text("Limpar") }
+                            }
                         }
                     }
                 }
@@ -206,33 +181,35 @@ fun HistoricoScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // SEÇÃO 2: LISTA
             if (lista.isEmpty()) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.History,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Nenhuma movimentação",
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Nenhuma transação encontrada", color = colors.onSurfaceVariant)
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(lista) { item ->
-                        TransacaoCard(
-                            transacao = item,
-                            onClick = { navController.navigate("registrar?id=${item.transacao.id}") },
-                            onDelete = { viewModel.deletar(item.transacao.id) }
+                    items(items = lista, key = { it.transacao.id }) { item ->
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            confirmValueChange = {
+                                if (it == SwipeToDismissBoxValue.EndToStart) {
+                                    viewModel.deletar(item.transacao.id)
+                                    Toast.makeText(context, "Removido", Toast.LENGTH_SHORT).show()
+                                    true
+                                } else false
+                            }
+                        )
+
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            backgroundContent = {
+                                val color by animateColorAsState(if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) colors.error else Color.Transparent)
+                                Box(
+                                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(color).padding(horizontal = 20.dp),
+                                    contentAlignment = Alignment.CenterEnd
+                                ) { Icon(Icons.Rounded.Delete, null, tint = colors.onError) }
+                            },
+                            content = {
+                                TransacaoCardHistorico(item, onClick = { navController.navigate("registrar?id=${item.transacao.id}") })
+                            }
                         )
                     }
                 }
@@ -242,120 +219,58 @@ fun HistoricoScreen(navController: NavController) {
 }
 
 @Composable
-fun TransacaoCard(
-    transacao: TransacaoComCategoria,
-    onClick: () -> Unit,
-    onDelete: () -> Unit
-) {
+fun TransacaoCardHistorico(transacao: TransacaoComCategoria, onClick: () -> Unit) {
     val isReceita = transacao.transacao.tipo == TipoTransacao.RECEITA
-    val isDark = isSystemInDarkTheme()
-
-    val color = if (isReceita) AcessibilidadeApp.corReceita else AcessibilidadeApp.corDespesa
-    val icon = if (isReceita) Icons.Rounded.ArrowUpward else Icons.Rounded.ArrowDownward
+    val colors = MaterialTheme.colorScheme
 
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
-        ),
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (isDark) color.copy(alpha = 0.3f) else Color(0xFFE0E0E0)
-        ),
+        colors = CardDefaults.cardColors(containerColor = colors.surface), // CyberSurface
+        elevation = CardDefaults.cardElevation(0.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-
-            Surface(
-                shape = CircleShape,
-                color = color.copy(alpha = 0.1f),
-                modifier = Modifier.size(40.dp)
+            Box(
+                modifier = Modifier.size(40.dp).clip(CircleShape).background(colors.surfaceVariant),
+                contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                val icon = if (isReceita) Icons.Rounded.ArrowUpward else getIconePagamento(transacao.transacao.metodoPagamento)
+                Icon(icon, null, tint = colors.onSurfaceVariant)
             }
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Coluna Central (Nome + Descrição + Pagamento)
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = transacao.categoriaNome,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                if (!transacao.transacao.descricao.isNullOrBlank()) {
-                    Text(
-                        text = transacao.transacao.descricao,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                }
-
-                // Data e Ícone do Pagamento
+                Text(transacao.categoriaNome, fontWeight = FontWeight.Bold, color = colors.onSurface)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // --- CORREÇÃO AQUI: Usando a função auxiliar ---
-                    Icon(
-                        imageVector = getIconePagamento(transacao.transacao.metodoPagamento),
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp), // Um pouco maior
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    Text(
-                        text = transacao.transacao.dataMillis.toDateFormat(),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
+                    val info = if(transacao.transacao.totalParcelas > 1) "Parcela ${transacao.transacao.parcelaAtual}/${transacao.transacao.totalParcelas}" else transacao.transacao.descricao?.ifBlank { null } ?: transacao.transacao.metodoPagamento
+                    Text(info.toString().lowercase().replaceFirstChar { it.uppercase() }, fontSize = 12.sp, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("•", fontSize = 12.sp, color = colors.onSurfaceVariant)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(transacao.transacao.dataMillis.toDateFormat(), fontSize = 12.sp, color = colors.onSurfaceVariant)
                 }
             }
 
-            // Coluna Direita (Valor + Delete)
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = transacao.transacao.valor.toCurrency(),
-                    color = color,
-                    fontWeight = FontWeight.Bold
-                )
-
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        Icons.Rounded.Delete,
-                        contentDescription = "Excluir transação",
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
+            Text(
+                text = transacao.transacao.valor.toCurrency(),
+                fontWeight = FontWeight.Bold,
+                color = if (isReceita) colors.primary else colors.error // ElectricGreen ou NeonError
+            )
         }
     }
 }
 
-// --- NOVA FUNÇÃO AUXILIAR (No final do arquivo) ---
 @Composable
-fun getIconePagamento(metodo: String): ImageVector {
-    // Mapeia a String do banco para um Ícone Visual
+private fun getIconePagamento(metodo: String): ImageVector {
     return when (metodo) {
         "CREDITO", "DEBITO" -> Icons.Rounded.CreditCard
-        "PIX" -> Icons.Rounded.QrCode // Use QrCode ou Smartphone se preferir
+        "PIX" -> Icons.Rounded.QrCode
         "DINHEIRO" -> Icons.Rounded.AttachMoney
-        else -> Icons.Rounded.Payment // Ícone genérico se não achar
+        else -> Icons.Rounded.Payment
     }
 }

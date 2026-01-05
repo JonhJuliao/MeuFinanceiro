@@ -5,31 +5,41 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 
+/**
+ * Centraliza decisões de acessibilidade visual do app
+ */
 object AcessibilidadeApp {
 
     var isModoDaltonicoAtivo by mutableStateOf(false)
 
-    // --- MUDANÇA AQUI: Usando as cores do seu tema "Executive Emerald" ---
+    // ================================
+    // CORES PADRÃO (IDENTIDADE VISUAL)
+    // ================================
+    private val ReceitaPadrao = ModernGreen
+    private val DespesaPadrao = LightError
 
-    // Agora a receita usa o mesmo verde "Emerald" dos seus botões
-    private val VerdeReceita = ModernGreen // Era 0xFF4CAF50, agora é 0xFF15803D
+    // ================================
+    // CORES PARA DALTÔNICOS
+    // Azul x Laranja → alta distinção
+    // ================================
+    private val ReceitaDaltonico = Color(0xFF2979FF)
+    private val DespesaDaltonico = Color(0xFFFF9100)
 
-    // Vamos usar o vermelho do seu tema Light também
-    private val VermelhoDespesa = LightError // Era 0xFFEF5350, agora é 0xFFDC2626
-
-    // --- MODO DALTÔNICO (MANTIDO) ---
-    private val AzulReceita = Color(0xFF2979FF)
-    private val LaranjaDespesa = Color(0xFFFF9100)
-
+    // ================================
+    // CORES FINAIS
+    // ================================
     val corReceita: Color
-        get() = if (isModoDaltonicoAtivo) AzulReceita else VerdeReceita
+        get() = if (isModoDaltonicoAtivo) ReceitaDaltonico else ReceitaPadrao
 
     val corDespesa: Color
-        get() = if (isModoDaltonicoAtivo) LaranjaDespesa else VermelhoDespesa
+        get() = if (isModoDaltonicoAtivo) DespesaDaltonico else DespesaPadrao
 
+    /**
+     * Fundo suave seguindo recomendação Material 3 (12%)
+     */
     val corReceitaFundo: Color
-        get() = if (isModoDaltonicoAtivo) AzulReceita.copy(alpha = 0.1f) else VerdeReceita.copy(alpha = 0.1f)
+        get() = corReceita.copy(alpha = 0.12f)
 
     val corDespesaFundo: Color
-        get() = if (isModoDaltonicoAtivo) LaranjaDespesa.copy(alpha = 0.1f) else VermelhoDespesa.copy(alpha = 0.1f)
+        get() = corDespesa.copy(alpha = 0.12f)
 }

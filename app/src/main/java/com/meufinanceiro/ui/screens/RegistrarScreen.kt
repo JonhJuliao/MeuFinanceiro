@@ -1,24 +1,29 @@
 package com.meufinanceiro.ui.screens
 
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility // <--- Importante
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -30,7 +35,6 @@ import com.meufinanceiro.backend.model.MetodoPagamento
 import com.meufinanceiro.backend.model.TipoTransacao
 import com.meufinanceiro.backend.repository.CategoriaRepository
 import com.meufinanceiro.backend.repository.TransacaoRepository
-import com.meufinanceiro.ui.theme.AcessibilidadeApp
 import com.meufinanceiro.ui.viewmodel.RegistrarViewModel
 import com.meufinanceiro.ui.viewmodel.RegistrarViewModelFactory
 import java.text.NumberFormat
@@ -44,6 +48,8 @@ fun RegistrarScreen(
     transacaoId: Long = 0L
 ) {
     val context = LocalContext.current
+    val colors = MaterialTheme.colorScheme // TEMA ATIVO
+
     val db = remember {
         Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db")
             .addMigrations(AppDatabase.MIGRATION_1_2)
@@ -57,30 +63,48 @@ fun RegistrarScreen(
         )
     )
 
-    // --- ESTADOS DA TELA ---
+    // VARIÁVEIS DE ESTADO
     var rawAmountString by remember { mutableStateOf("") }
-    var amountTextFieldValue by remember { mutableStateOf(TextFieldValue("")) }
+    var amountTextFieldValue by remember { mutableStateOf(TextFieldValue("R$ 0,00")) }
     var description by remember { mutableStateOf("") }
+
     var selectedCategory by remember { mutableStateOf<Categoria?>(null) }
     var tipo by remember { mutableStateOf(TipoTela.DESPESA) }
     var isSaving by remember { mutableStateOf(false) }
 
     var metodoPagamento by remember { mutableStateOf(MetodoPagamento.DINHEIRO) }
-
-    // NOVO: Estado para parcelas (padrão 1)
     var numeroParcelas by remember { mutableIntStateOf(1) }
 
-    // Data
+    // NOVO: Controle de fatura fechada
+    var isFaturaFechada by remember { mutableStateOf(false) }
+
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
     var showDatePicker by remember { mutableStateOf(false) }
+    val listaCategorias by viewModel.categorias.collectAsState()
 
-    // Cores
-    val corReceita = AcessibilidadeApp.corReceita
-    val corDespesa = AcessibilidadeApp.corDespesa
-    val corAtiva = if (tipo == TipoTela.RECEITA) corReceita else corDespesa
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val corAtiva = if (tipo == TipoTela.RECEITA) colors.primary else colors.error
 
-    // --- CARREGAR DADOS ---
+    // INTELIGÊNCIA DE CATEGORIA
+    LaunchedEffect(selectedCategory) {
+        selectedCategory?.let { cat ->
+            val nome = cat.nome.trim().lowercase()
+            val novoMetodo = when {
+                nome.contains("uber") || nome.contains("ifood") ||
+                        nome.contains("amazon") || nome.contains("netflix") ||
+                        nome.contains("assinatura") -> MetodoPagamento.CREDITO
+
+                nome.contains("mercado") || nome.contains("farmacia") ||
+                        nome.contains("internet") -> MetodoPagamento.DEBITO
+
+                nome.contains("padaria") || nome.contains("onibus") -> MetodoPagamento.DINHEIRO
+
+                else -> null
+            }
+            if (novoMetodo != null) metodoPagamento = novoMetodo
+        }
+    }
+
+    // CARREGAR DADOS (EDIÇÃO)
     LaunchedEffect(transacaoId) {
         if (transacaoId > 0) {
             viewModel.carregarDadosParaEdicao(transacaoId) { transacao, categoria ->
@@ -91,19 +115,11 @@ fun RegistrarScreen(
                 datePickerState.selectedDateMillis = transacao.dataMillis
                 selectedCategory = categoria
                 tipo = if (transacao.tipo == TipoTransacao.RECEITA) TipoTela.RECEITA else TipoTela.DESPESA
-
-                metodoPagamento = try {
-                    MetodoPagamento.valueOf(transacao.metodoPagamento)
-                } catch (e: Exception) {
-                    MetodoPagamento.DINHEIRO
-                }
-                // Carrega parcelas se existirem
+                metodoPagamento = try { MetodoPagamento.valueOf(transacao.metodoPagamento) } catch (e: Exception) { MetodoPagamento.DINHEIRO }
                 numeroParcelas = transacao.totalParcelas
             }
         }
     }
-
-    val listaCategorias by viewModel.categorias.collectAsState()
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -115,55 +131,64 @@ fun RegistrarScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(if (transacaoId > 0L) "Editar Transação" else "Nova Transação", fontWeight = FontWeight.Bold) },
+            CenterAlignedTopAppBar(
+                title = { Text(if (transacaoId > 0L) "Editar" else "Nova Transação", fontWeight = FontWeight.SemiBold, color = colors.onBackground) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
+                        Icon(Icons.Rounded.Close, contentDescription = "Cancelar", tint = colors.onBackground)
                     }
-                }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = colors.background)
             )
-        }
+        },
+        containerColor = colors.background
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .padding(innerPadding)
-                .padding(16.dp)
-                .fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
-            // 1. SELETOR TIPO
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FilterChip(
-                    selected = tipo == TipoTela.RECEITA,
-                    onClick = { tipo = TipoTela.RECEITA },
-                    label = { Text("Receita") },
-                    leadingIcon = { if (tipo == TipoTela.RECEITA) Icon(Icons.Rounded.ArrowUpward, null) },
-                    modifier = Modifier.weight(1f).height(40.dp),
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = corReceita,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                )
+            // ABAS
+            Row(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(colors.surface),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (tipo == TipoTela.DESPESA) colors.error.copy(alpha = 0.2f) else Color.Transparent)
+                        .clickable { tipo = TipoTela.DESPESA },
+                    contentAlignment = Alignment.Center
+                ) { Text("Despesa", color = if (tipo == TipoTela.DESPESA) colors.error else colors.onSurfaceVariant, fontWeight = FontWeight.Bold) }
 
-                FilterChip(
-                    selected = tipo == TipoTela.DESPESA,
-                    onClick = { tipo = TipoTela.DESPESA },
-                    label = { Text("Despesa") },
-                    leadingIcon = { if (tipo == TipoTela.DESPESA) Icon(Icons.Rounded.ArrowDownward, null) },
-                    modifier = Modifier.weight(1f).height(40.dp),
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = corDespesa,
-                        selectedLabelColor = MaterialTheme.colorScheme.onError,
-                        selectedLeadingIconColor = MaterialTheme.colorScheme.onError
-                    )
-                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (tipo == TipoTela.RECEITA) colors.primary.copy(alpha = 0.2f) else Color.Transparent)
+                        .clickable { tipo = TipoTela.RECEITA },
+                    contentAlignment = Alignment.Center
+                ) { Text("Receita", color = if (tipo == TipoTela.RECEITA) colors.primary else colors.onSurfaceVariant, fontWeight = FontWeight.Bold) }
             }
 
-            // 2. CAMPO VALOR
-            OutlinedTextField(
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // VALOR
+            Text("Valor da transação", color = colors.onSurfaceVariant, fontSize = 14.sp)
+            TextField(
                 value = amountTextFieldValue,
                 onValueChange = { novoValor ->
                     val apenasNumeros = novoValor.text.filter { it.isDigit() }
@@ -173,185 +198,214 @@ fun RegistrarScreen(
                         amountTextFieldValue = TextFieldValue(text = formatado, selection = TextRange(formatado.length))
                     }
                 },
-                label = { Text("Valor") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                leadingIcon = { Icon(Icons.Rounded.AttachMoney, null) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
                 textStyle = LocalTextStyle.current.copy(
-                    fontSize = 24.sp,
+                    fontSize = 40.sp,
                     fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
                     color = corAtiva
                 ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
-                    unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
-                    focusedBorderColor = corAtiva,
-                    focusedLabelColor = corAtiva
-                )
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                modifier = Modifier.fillMaxWidth()
             )
 
-            // 3. PAGAMENTO E PARCELAS
-            Column {
-                Text(
-                    text = "Forma de Pagamento",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+            Spacer(modifier = Modifier.height(32.dp))
 
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    val opcoes = MetodoPagamento.values()
-                    items(opcoes.size) { index ->
-                        val metodo = opcoes[index]
-                        val isSelected = metodoPagamento == metodo
-                        val label = metodo.name.lowercase().replaceFirstChar { it.uppercase() }
+            // CARD FORMULÁRIO
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                elevation = CardDefaults.cardElevation(0.dp)
+            ) {
+                Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
 
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { metodoPagamento = metodo },
-                            label = { Text(label) },
-                            leadingIcon = { if (isSelected) Icon(Icons.Rounded.Check, null) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        )
-                    }
-                }
+                    // PAGAMENTO
+                    Column {
+                        Text("Pagamento", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(MetodoPagamento.values().size) { index ->
+                                val metodo = MetodoPagamento.values()[index]
+                                val isSelected = metodoPagamento == metodo
+                                val label = metodo.name.lowercase().replaceFirstChar { it.uppercase() }
 
-                // --- NOVO: CAMPO DE PARCELAS ---
-                AnimatedVisibility(visible = metodoPagamento == MetodoPagamento.CREDITO) {
-                    var parcelasStr by remember { mutableStateOf("1") }
-
-                    OutlinedTextField(
-                        value = parcelasStr,
-                        onValueChange = {
-                            if (it.all { char -> char.isDigit() } && it.length <= 2) {
-                                parcelasStr = it
-                                numeroParcelas = it.toIntOrNull() ?: 1
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { metodoPagamento = metodo },
+                                    label = { Text(label) },
+                                    leadingIcon = { if (isSelected) Icon(Icons.Rounded.Check, null) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = corAtiva.copy(alpha = 0.2f),
+                                        selectedLabelColor = corAtiva,
+                                        containerColor = colors.background,
+                                        labelColor = colors.onSurface
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(borderColor = if(isSelected) corAtiva else colors.outline, enabled = true, selected = isSelected)
+                                )
                             }
-                        },
-                        label = { Text("Nº de Parcelas") },
-                        // Ícone numérico genérico ou use FilterKp se preferir
-                        leadingIcon = { Icon(Icons.Rounded.Tag, contentDescription = null) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
-                            unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
-                        )
-                    )
-                }
-            }
+                        }
 
-            // 4. DATA
-            val dataFormatada = remember(datePickerState.selectedDateMillis) {
-                val millis = datePickerState.selectedDateMillis
-                if (millis != null) {
-                    val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-                    cal.timeInMillis = millis
-                    SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).apply {
-                        timeZone = TimeZone.getTimeZone("UTC")
-                    }.format(cal.time)
-                } else {
-                    SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
-                }
-            }
+                        // ÁREA DO CRÉDITO: PARCELAS E VENCIMENTO
+                        AnimatedVisibility(visible = metodoPagamento == MetodoPagamento.CREDITO) {
+                            Column(modifier = Modifier.padding(top = 12.dp)) {
+                                // Parcelas
+                                var parcelasStr by remember { mutableStateOf("1") }
+                                OutlinedTextField(
+                                    value = parcelasStr,
+                                    onValueChange = { if (it.all { char -> char.isDigit() } && it.length <= 2) { parcelasStr = it; numeroParcelas = it.toIntOrNull() ?: 1 } },
+                                    label = { Text("Parcelas") },
+                                    trailingIcon = { Text("x", modifier = Modifier.padding(end = 12.dp), color = colors.onSurfaceVariant) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = corAtiva,
+                                        unfocusedBorderColor = colors.outline,
+                                        focusedTextColor = colors.onSurface,
+                                        unfocusedTextColor = colors.onSurface
+                                    )
+                                )
 
-            Box(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = dataFormatada,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Data") },
-                    leadingIcon = { Icon(Icons.Rounded.CalendarToday, null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = false,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        disabledContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
-                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                        disabledBorderColor = MaterialTheme.colorScheme.outline,
-                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-                Box(Modifier.matchParentSize().clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { showDatePicker = true })
-            }
+                                Spacer(modifier = Modifier.height(12.dp))
 
-            // 5. CATEGORIA
-            var expanded by remember { mutableStateOf(false) }
-            ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-                OutlinedTextField(
-                    readOnly = true,
-                    value = selectedCategory?.nome ?: "Selecione uma categoria",
-                    onValueChange = {},
-                    modifier = Modifier.fillMaxWidth().menuAnchor(),
-                    label = { Text("Categoria") },
-                    leadingIcon = { Icon(Icons.Rounded.Category, null) },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
-                        unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
-                    )
-                )
-                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    if (listaCategorias.isEmpty()) {
-                        DropdownMenuItem(text = { Text("Sem categorias cadastradas") }, onClick = { expanded = false })
-                    } else {
-                        listaCategorias.forEach { categoria ->
-                            DropdownMenuItem(text = { Text(categoria.nome) }, onClick = { selectedCategory = categoria; expanded = false })
+                                // NOVO: Toggle de Fatura Fechada
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(colors.background, RoundedCornerShape(12.dp))
+                                        .clickable { isFaturaFechada = !isFaturaFechada }
+                                        .padding(12.dp)
+                                ) {
+                                    Checkbox(
+                                        checked = isFaturaFechada,
+                                        onCheckedChange = { isFaturaFechada = it },
+                                        colors = CheckboxDefaults.colors(checkedColor = corAtiva)
+                                    )
+                                    Column {
+                                        Text("Fatura já fechou?", fontWeight = FontWeight.Bold, color = colors.onSurface)
+                                        Text("Pagar no mês que vem", fontSize = 12.sp, color = colors.onSurfaceVariant)
+                                    }
+                                }
+                            }
                         }
                     }
+
+                    HorizontalDivider(color = colors.outline.copy(alpha = 0.2f))
+
+                    // DATA
+                    val dataFormatada = remember(datePickerState.selectedDateMillis, isFaturaFechada, metodoPagamento) {
+                        val millisOriginal = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
+                        val cal = Calendar.getInstance()
+                        cal.timeInMillis = millisOriginal
+
+                        // Simula visualmente a data de pagamento
+                        if (metodoPagamento == MetodoPagamento.CREDITO && isFaturaFechada) {
+                            cal.add(Calendar.MONTH, 1)
+                        }
+
+                        val formatter = SimpleDateFormat("dd 'de' MMMM, yyyy", Locale("pt", "BR"))
+                        formatter.format(cal.time)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.CalendarToday, null, tint = colors.onSurfaceVariant)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Data da Compra", color = colors.onSurfaceVariant)
+                        }
+                        // Mostra data recalculada se for crédito fechado
+                        Text(dataFormatada, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
+                    }
+
+                    HorizontalDivider(color = colors.outline.copy(alpha = 0.2f))
+
+                    // CATEGORIA
+                    var expanded by remember { mutableStateOf(false) }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { expanded = true },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Category, null, tint = colors.onSurfaceVariant)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Categoria", color = colors.onSurfaceVariant)
+                        }
+                        Box {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(selectedCategory?.nome ?: "Selecionar", fontWeight = FontWeight.SemiBold, color = if(selectedCategory == null) corAtiva else colors.onSurface)
+                                Icon(Icons.Rounded.ChevronRight, null, tint = colors.onSurfaceVariant)
+                            }
+                            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(colors.surface)) {
+                                if (listaCategorias.isEmpty()) {
+                                    DropdownMenuItem(text = { Text("Nenhuma categoria", color = colors.onSurface) }, onClick = { expanded = false })
+                                } else {
+                                    listaCategorias.forEach { cat ->
+                                        DropdownMenuItem(text = { Text(cat.nome, color = colors.onSurface) }, onClick = { selectedCategory = cat; expanded = false })
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = colors.outline.copy(alpha = 0.2f))
+
+                    // DESCRIÇÃO
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Edit, null, tint = colors.onSurfaceVariant)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        TextField(
+                            value = description,
+                            onValueChange = { description = it },
+                            placeholder = { Text("Descrição (Opcional)", color = colors.onSurfaceVariant.copy(alpha = 0.5f)) },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                focusedTextColor = colors.onSurface,
+                                unfocusedTextColor = colors.onSurface
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
 
-            // 6. DESCRIÇÃO
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("Descrição (Opcional)") },
-                leadingIcon = { Icon(Icons.Rounded.Description, null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
-                    unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
-                )
-            )
+            Spacer(modifier = Modifier.height(32.dp))
 
-            Spacer(modifier = Modifier.weight(1f))
-
-            // 7. BOTÃO SALVAR
+            // BOTÃO SALVAR
             Button(
                 enabled = !isSaving,
                 onClick = {
                     val valorFinal = if (rawAmountString.isNotEmpty()) rawAmountString.toDouble() / 100 else 0.0
                     if (valorFinal <= 0.0 || selectedCategory == null) {
-                        Toast.makeText(context, "Preencha valor e categoria", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Insira valor e categoria", Toast.LENGTH_SHORT).show()
                     } else {
                         isSaving = true
 
-                        // Ajuste Data
-                        val dataSelecionadaUTC = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
-                        val fusoHorario = TimeZone.getDefault()
-                        val offset = fusoHorario.getOffset(dataSelecionadaUTC)
-                        val dataParaSalvar = dataSelecionadaUTC - offset
+                        // LÓGICA DE DATA INTELIGENTE
+                        val cal = Calendar.getInstance()
+                        cal.timeInMillis = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
 
-                        // Lógica para enviar o nº correto de parcelas
-                        // Se NÃO for crédito, forçamos 1 parcela
+                        // Se for crédito e fatura fechada, joga para o próximo mês
+                        if (metodoPagamento == MetodoPagamento.CREDITO && isFaturaFechada) {
+                            cal.add(Calendar.MONTH, 1)
+                        }
+
+                        val dataParaSalvar = cal.timeInMillis
                         val parcelasParaSalvar = if (metodoPagamento == MetodoPagamento.CREDITO) numeroParcelas else 1
 
                         viewModel.salvarTransacao(
@@ -361,25 +415,30 @@ fun RegistrarScreen(
                             categoriaId = selectedCategory!!.id,
                             descricao = description,
                             metodoPagamento = metodoPagamento.name,
-                            totalParcelas = parcelasParaSalvar, // <--- NOVO
-                            onSuccess = { Toast.makeText(context, "Salvo!", Toast.LENGTH_SHORT).show(); navController.popBackStack() },
+                            totalParcelas = parcelasParaSalvar,
+                            onSuccess = {
+                                Toast.makeText(context, "Salvo com sucesso", Toast.LENGTH_SHORT).show()
+                                navController.popBackStack()
+                            },
                             onError = { isSaving = false }
                         )
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = corAtiva)
+                colors = ButtonDefaults.buttonColors(containerColor = corAtiva, disabledContainerColor = corAtiva.copy(alpha = 0.5f)),
+                elevation = ButtonDefaults.buttonElevation(4.dp)
             ) {
-                if (isSaving) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
-                else Text(if (transacaoId > 0L) "Atualizar" else "Salvar", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                if (isSaving) CircularProgressIndicator(color = colors.onPrimary, modifier = Modifier.size(24.dp))
+                else Text("Salvar", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = colors.onPrimary)
             }
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
 
 fun formatarMoedaVisual(centavosStr: String): String {
-    if (centavosStr.isEmpty()) return ""
+    if (centavosStr.isEmpty()) return "R$ 0,00"
     val valor = centavosStr.toLongOrNull() ?: 0L
     val nf = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
     return nf.format(valor / 100.0)

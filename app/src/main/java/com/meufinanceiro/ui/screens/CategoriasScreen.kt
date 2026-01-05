@@ -1,8 +1,8 @@
 package com.meufinanceiro.ui.screens
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -35,45 +36,38 @@ import com.meufinanceiro.ui.viewmodel.CategoriasViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CategoriasScreen(
-    navController: NavController
-) {
+fun CategoriasScreen(navController: NavController) {
     val context = LocalContext.current
-    val isDark = isSystemInDarkTheme()
+    val colors = MaterialTheme.colorScheme // TEMA ATIVO
 
     val db = remember {
         Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db")
-            .addMigrations(AppDatabase.MIGRATION_1_2) // <--- OBRIGATÓRIO TER ISSO
+            .addMigrations(AppDatabase.MIGRATION_1_2)
             .build()
     }
-    // Precisamos dos dois repos agora
     val catRepo = remember { CategoriaRepository(db.categoriaDao()) }
     val transacaoRepo = remember { TransacaoRepository(db.transacaoDao()) }
 
-    val viewModel: CategoriasViewModel = viewModel(
-        factory = CategoriasViewModelFactory(catRepo, transacaoRepo)
-    )
-
+    val viewModel: CategoriasViewModel = viewModel(factory = CategoriasViewModelFactory(catRepo, transacaoRepo))
     val listaComProgresso by viewModel.uiState.collectAsState()
 
     var novaCategoria by remember { mutableStateOf("") }
     var novaMeta by remember { mutableStateOf("") }
+    var temMeta by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Categorias e Metas", fontWeight = FontWeight.Bold) },
+                title = { Text("Categorias e Metas", fontWeight = FontWeight.Bold, color = colors.onBackground) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
+                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar", tint = colors.onBackground)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (isDark) MaterialTheme.colorScheme.background else Color(0xFFFAFAFA)
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background)
             )
         },
-        containerColor = if (isDark) MaterialTheme.colorScheme.background else Color(0xFFFAFAFA)
+        containerColor = colors.background
     ) { padding ->
 
         Column(
@@ -83,46 +77,61 @@ fun CategoriasScreen(
                 .fillMaxSize()
         ) {
 
-            // --- CARTÃO DE CRIAÇÃO (Mais compacto e elegante) ---
+            // CARD DE CRIAÇÃO
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
-                ),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
                 shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(2.dp)
+                elevation = CardDefaults.cardElevation(0.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = "Nova Categoria",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                    Text("Nova Categoria", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = colors.onSurface)
+
+                    OutlinedTextField(
+                        value = novaCategoria,
+                        onValueChange = { novaCategoria = it },
+                        label = { Text("Nome (Ex: Mercado)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = colors.background,
+                            unfocusedContainerColor = colors.background,
+                            focusedTextColor = colors.onSurface,
+                            unfocusedTextColor = colors.onSurface,
+                            cursorColor = colors.primary,
+                            focusedBorderColor = colors.primary,
+                            unfocusedBorderColor = colors.outline
+                        )
                     )
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // Nome (Peso maior)
-                        OutlinedTextField(
-                            value = novaCategoria,
-                            onValueChange = { novaCategoria = it },
-                            label = { Text("Nome") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1.5f),
-                            shape = RoundedCornerShape(12.dp)
-                        )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { temMeta = !temMeta }
+                    ) {
+                        Checkbox(checked = temMeta, onCheckedChange = { temMeta = it }, colors = CheckboxDefaults.colors(checkedColor = colors.primary))
+                        Text("Definir um limite de gastos (Meta)", fontSize = 14.sp, color = colors.onSurface)
+                    }
 
-                        // Meta (Peso menor)
+                    AnimatedVisibility(visible = temMeta) {
                         OutlinedTextField(
                             value = novaMeta,
                             onValueChange = { if (it.all { char -> char.isDigit() || char == '.' }) novaMeta = it },
-                            label = { Text("Meta R$") },
+                            label = { Text("Valor da Meta (R$)") },
                             placeholder = { Text("0.00") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = colors.background,
+                                unfocusedContainerColor = colors.background,
+                                focusedTextColor = colors.onSurface,
+                                unfocusedTextColor = colors.onSurface,
+                                focusedBorderColor = colors.primary
+                            )
                         )
                     }
 
@@ -130,44 +139,34 @@ fun CategoriasScreen(
                         onClick = {
                             val nome = novaCategoria.trim()
                             if (nome.isNotEmpty()) {
-                                val metaValor = novaMeta.toDoubleOrNull() ?: 0.0
+                                val metaValor = if (temMeta) novaMeta.toDoubleOrNull() ?: 0.0 else 0.0
                                 viewModel.adicionarCategoria(nome, metaValor)
                                 novaCategoria = ""
                                 novaMeta = ""
+                                temMeta = false
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary)
                     ) {
-                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Rounded.Add, null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Adicionar")
+                        Text("Criar Categoria")
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- LISTA ---
-            Text(
-                text = "Metas Definidas",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
-            )
+            Text("Suas Categorias", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(bottom = 12.dp), color = colors.onBackground)
 
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 items(listaComProgresso) { item ->
-                    CategoriaProgressoCard(
-                        item = item,
-                        onDelete = { viewModel.deletarCategoria(item.categoria) }
-                    )
+                    CategoriaProgressoCard(item = item, onDelete = { viewModel.deletarCategoria(item.categoria) })
                 }
             }
         }
@@ -175,117 +174,89 @@ fun CategoriasScreen(
 }
 
 @Composable
-fun CategoriaProgressoCard(
-    item: CategoriaComProgresso,
-    onDelete: () -> Unit
-) {
-    val isDark = isSystemInDarkTheme()
+fun CategoriaProgressoCard(item: CategoriaComProgresso, onDelete: () -> Unit) {
     val categoria = item.categoria
-
-    // Se não tiver meta definida, mostra layout simples
     val temMeta = categoria.metaMensal > 0
+    val colors = MaterialTheme.colorScheme
 
     Card(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
-        ),
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.1f) else Color(0xFFEEEEEE)
-        )
+        colors = CardDefaults.cardColors(containerColor = colors.surface),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-
-            // LINHA 1: Ícone, Nome e Lixeira
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Ícone com Inicial
                     Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(
-                                // Se estourou a meta, o fundo do ícone fica da cor de alerta
-                                if (temMeta && item.totalGasto > categoria.metaMensal) item.corStatus.copy(alpha = 0.1f)
-                                else MaterialTheme.colorScheme.primaryContainer,
-                                CircleShape
-                            ),
+                        modifier = Modifier.size(40.dp).clip(CircleShape).background(colors.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = categoria.nome.take(1).uppercase(),
-                            fontWeight = FontWeight.Bold,
-                            color = if (temMeta && item.totalGasto > categoria.metaMensal) item.corStatus else MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                        Icon(imageVector = getIconeCategoriaLocal(categoria.nome), contentDescription = null, tint = colors.onSurfaceVariant)
                     }
 
                     Spacer(modifier = Modifier.width(12.dp))
 
-                    Text(
-                        text = categoria.nome,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Column {
+                        Text(text = categoria.nome, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = colors.onSurface)
+                        if (!temMeta) Text("Sem meta definida", fontSize = 11.sp, color = colors.onSurfaceVariant)
+                    }
                 }
 
-                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-                    Icon(
-                        Icons.Rounded.Delete,
-                        contentDescription = "Excluir",
-                        tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                    )
+                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Rounded.Delete, contentDescription = "Excluir", tint = colors.onSurfaceVariant.copy(alpha = 0.5f))
                 }
             }
 
-            // Se tiver meta, mostra a barra de progresso
+            Spacer(modifier = Modifier.height(16.dp))
+
             if (temMeta) {
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // BARRA DE PROGRESSO
+                // Progresso com cor de fundo visível no dark mode
                 LinearProgressIndicator(
-                    progress = { item.progresso }, // Passa o valor aqui dentro da lambda
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp)),
-                    color = item.corStatus,
-                    trackColor = if (isDark) Color.DarkGray else Color(0xFFE0E0E0),
+                    progress = { item.progresso },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                    color = if(item.corStatus == Color.Red) colors.error else colors.primary, // Usa cores do tema
+                    trackColor = colors.surfaceVariant,
                 )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // TEXTOS ABAIXO DA BARRA
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = item.totalGasto.toCurrency(),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = item.corStatus // Cor do valor gasto acompanha o status
-                    )
-
-                    Text(
-                        text = "Meta: ${categoria.metaMensal.toCurrency()}",
-                        fontSize = 12.sp,
-                        color = Color.Gray
-                    )
+                    Text(item.totalGasto.toCurrency(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if(item.corStatus == Color.Red) colors.error else colors.primary)
+                    Text("de ${categoria.metaMensal.toCurrency()}", fontSize = 12.sp, color = colors.onSurfaceVariant)
                 }
             } else {
-                // Sem meta, apenas mostra "Sem meta definida" discreto
-                Text(
-                    text = "Sem meta mensal",
-                    fontSize = 11.sp,
-                    color = Color.Gray.copy(alpha = 0.5f),
-                    modifier = Modifier.padding(start = 48.dp, top = 4.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(Icons.Rounded.Edit, null, modifier = Modifier.size(14.dp), tint = colors.primary)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Toque para definir uma meta", fontSize = 12.sp, color = colors.primary)
+                }
             }
         }
+    }
+}
+
+private fun getIconeCategoriaLocal(nome: String): ImageVector {
+    val nomeLimpo = nome.trim().lowercase()
+    return when {
+        nomeLimpo.contains("mercado") || nomeLimpo.contains("compras") -> Icons.Rounded.ShoppingCart
+        nomeLimpo.contains("uber") || nomeLimpo.contains("transporte") -> Icons.Rounded.DirectionsCar
+        nomeLimpo.contains("ifood") || nomeLimpo.contains("restaurante") || nomeLimpo.contains("lanche") -> Icons.Rounded.Restaurant
+        nomeLimpo.contains("internet") || nomeLimpo.contains("wifi") -> Icons.Rounded.Wifi
+        nomeLimpo.contains("casa") || nomeLimpo.contains("luz") || nomeLimpo.contains("aluguel") -> Icons.Rounded.Home
+        nomeLimpo.contains("saude") || nomeLimpo.contains("farmacia") -> Icons.Rounded.LocalPharmacy
+        else -> Icons.Rounded.Category
     }
 }

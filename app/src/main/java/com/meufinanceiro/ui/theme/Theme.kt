@@ -4,22 +4,17 @@ import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Shapes
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 
-// 1. SHAPES
+// ---------- SHAPES ----------
 val FinanceiroShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(12.dp),
@@ -28,62 +23,35 @@ val FinanceiroShapes = Shapes(
     extraLarge = RoundedCornerShape(32.dp)
 )
 
-// 2. TEMA ESCURO
+// ---------- DARK ----------
 private val DarkColorScheme = darkColorScheme(
     primary = ElectricGreen,
     onPrimary = CyberBlack,
-    primaryContainer = CyberSurface,
-    onPrimaryContainer = ElectricGreen,
-
-    // Ajuste para não ficar roxo no dark mode também
-    secondary = ElectricGreen,
-    secondaryContainer = CyberSurface,
-    onSecondaryContainer = ElectricGreen,
-
     background = CyberBlack,
     onBackground = Color.White,
-
     surface = CyberSurface,
     onSurface = Color.White,
-
-    // Removemos o roxo daqui também
-    surfaceVariant = CyberSurface,
-    onSurfaceVariant = Color.White,
-
     error = NeonError,
-    onError = CyberBlack
+    onError = CyberBlack,
+    surfaceTint = Color.Transparent
 )
 
-// 3. TEMA CLARO (A CORREÇÃO DO LILÁS ESTÁ AQUI)
+// ---------- LIGHT ----------
 private val LightColorScheme = lightColorScheme(
     primary = ModernGreen,
     onPrimary = Color.White,
-    primaryContainer = SoftMintGray, // Fundo suave (ex: toggle buttons)
+    primaryContainer = SoftMintGray,
     onPrimaryContainer = ModernGreen,
-
-    secondary = ModernGreen,
-    onSecondary = Color.White,
-    secondaryContainer = SoftMintGray, // Fundo suave
-    onSecondaryContainer = ModernGreen,
-
     background = TechWhite,
     onBackground = TechDarkText,
-
     surface = TechSurface,
     onSurface = TechDarkText,
-
-    // AQUI MATAMOS O LILÁS:
-    // Antes estava vazio (padrão roxo). Agora é nosso Cinza-Menta.
     surfaceVariant = SoftMintGray,
     onSurfaceVariant = TechDarkText,
-
     error = LightError,
-    onError = Color.White
+    onError = Color.White,
+    surfaceTint = Color.Transparent
 )
-
-// Em ui/theme/Theme.kt
-
-// ... (seus imports e definições de cores Dark/Light continuam iguais)
 
 @Composable
 fun MeuFinanceiroTheme(
@@ -93,19 +61,12 @@ fun MeuFinanceiroTheme(
 ) {
     val context = LocalContext.current
 
-    val baseColorScheme = when { // Mudei o nome para baseColorScheme
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+    val colorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
-
-    // --- CORREÇÃO DO FUNDO ROSA (SURFACE TINT) ---
-    // Isso força o tint a ser transparente, garantindo fundos neutros
-    val colorScheme = baseColorScheme.copy(
-        surfaceTint = Color.Transparent
-    )
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -115,7 +76,7 @@ fun MeuFinanceiroTheme(
             window.navigationBarColor = colorScheme.background.toArgb()
 
             WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = false // Ícones brancos no topo
+                isAppearanceLightStatusBars = !darkTheme
                 isAppearanceLightNavigationBars = !darkTheme
             }
         }
