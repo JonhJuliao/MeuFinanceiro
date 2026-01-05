@@ -25,7 +25,7 @@ import androidx.navigation.NavController
 import androidx.room.Room
 import com.meufinanceiro.backend.db.AppDatabase
 import com.meufinanceiro.backend.model.Categoria
-import com.meufinanceiro.backend.model.MetodoPagamento // <--- GARANTA QUE O ENUM ESTÁ NO SEU MODEL
+import com.meufinanceiro.backend.model.MetodoPagamento
 import com.meufinanceiro.backend.model.TipoTransacao
 import com.meufinanceiro.backend.repository.CategoriaRepository
 import com.meufinanceiro.backend.repository.TransacaoRepository
@@ -61,7 +61,7 @@ fun RegistrarScreen(
     var tipo by remember { mutableStateOf(TipoTela.DESPESA) }
     var isSaving by remember { mutableStateOf(false) }
 
-    // NOVO: Estado do Método de Pagamento (Padrão: Dinheiro)
+    // Estado do Método de Pagamento (Padrão: Dinheiro)
     var metodoPagamento by remember { mutableStateOf(MetodoPagamento.DINHEIRO) }
 
     // Data
@@ -178,7 +178,7 @@ fun RegistrarScreen(
                     fontWeight = FontWeight.Bold,
                     color = corAtiva
                 ),
-                // --- CORREÇÃO FUNDO ROSA ---
+                // --- CORREÇÃO FUNDO ROSA (TRAVANDO COR BRANCA/SURFACE) ---
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
                     unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
@@ -187,8 +187,7 @@ fun RegistrarScreen(
                 )
             )
 
-            // 3. SELETOR DE FORMA DE PAGAMENTO (NOVO!)
-            // Aqui está onde você escolhe se foi Dinheiro, Cartão, etc.
+            // 3. SELETOR DE FORMA DE PAGAMENTO
             Column {
                 Text(
                     text = "Forma de Pagamento",
@@ -201,13 +200,11 @@ fun RegistrarScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Lista os itens do Enum
                     val opcoes = MetodoPagamento.values()
                     items(opcoes.size) { index ->
                         val metodo = opcoes[index]
                         val isSelected = metodoPagamento == metodo
 
-                        // Nome bonito para exibir (Ex: CREDITO -> Crédito)
                         val label = metodo.name.lowercase().replaceFirstChar { it.uppercase() }
 
                         FilterChip(
@@ -250,7 +247,6 @@ fun RegistrarScreen(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = false,
                     shape = RoundedCornerShape(12.dp),
-                    // --- CORREÇÃO FUNDO ROSA ---
                     colors = OutlinedTextFieldDefaults.colors(
                         disabledContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
                         disabledTextColor = MaterialTheme.colorScheme.onSurface,
@@ -277,7 +273,6 @@ fun RegistrarScreen(
                     leadingIcon = { Icon(Icons.Rounded.Category, null) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                     shape = RoundedCornerShape(12.dp),
-                    // --- CORREÇÃO FUNDO ROSA ---
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
                         unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
@@ -302,7 +297,6 @@ fun RegistrarScreen(
                 leadingIcon = { Icon(Icons.Rounded.Description, null) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                // --- CORREÇÃO FUNDO ROSA ---
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
                     unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
@@ -311,7 +305,7 @@ fun RegistrarScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // 7. BOTÃO SALVAR
+            // 7. BOTÃO SALVAR (COM CORREÇÃO DE DATA)
             Button(
                 enabled = !isSaving,
                 onClick = {
@@ -320,13 +314,24 @@ fun RegistrarScreen(
                         Toast.makeText(context, "Preencha valor e categoria", Toast.LENGTH_SHORT).show()
                     } else {
                         isSaving = true
+
+                        // --- CORREÇÃO DA DATA AQUI ---
+                        // 1. Pegamos a data selecionada (UTC)
+                        val dataSelecionadaUTC = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
+
+                        // 2. Calculamos o fuso horário (ex: -3h)
+                        val fusoHorario = TimeZone.getDefault()
+                        val offset = fusoHorario.getOffset(dataSelecionadaUTC)
+
+                        // 3. Ajustamos a data para compensar o fuso ao salvar
+                        val dataParaSalvar = dataSelecionadaUTC - offset
+
                         viewModel.salvarTransacao(
                             tipoTela = tipo,
                             valor = valorFinal,
-                            dataMillis = datePickerState.selectedDateMillis ?: System.currentTimeMillis(),
+                            dataMillis = dataParaSalvar, // <--- Data corrigida
                             categoriaId = selectedCategory!!.id,
                             descricao = description,
-                            // PASSANDO O MÉTODO SELECIONADO
                             metodoPagamento = metodoPagamento.name,
                             onSuccess = { Toast.makeText(context, "Salvo!", Toast.LENGTH_SHORT).show(); navController.popBackStack() },
                             onError = { isSaving = false }

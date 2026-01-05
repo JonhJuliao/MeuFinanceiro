@@ -81,6 +81,10 @@ private val LightColorScheme = lightColorScheme(
     onError = Color.White
 )
 
+// Em ui/theme/Theme.kt
+
+// ... (seus imports e definições de cores Dark/Light continuam iguais)
+
 @Composable
 fun MeuFinanceiroTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -89,13 +93,19 @@ fun MeuFinanceiroTheme(
 ) {
     val context = LocalContext.current
 
-    val colorScheme = when {
+    val baseColorScheme = when { // Mudei o nome para baseColorScheme
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
+
+    // --- CORREÇÃO DO FUNDO ROSA (SURFACE TINT) ---
+    // Isso força o tint a ser transparente, garantindo fundos neutros
+    val colorScheme = baseColorScheme.copy(
+        surfaceTint = Color.Transparent
+    )
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -105,8 +115,7 @@ fun MeuFinanceiroTheme(
             window.navigationBarColor = colorScheme.background.toArgb()
 
             WindowCompat.getInsetsController(window, view).apply {
-                // CORREÇÃO: Força ícones brancos na barra de status (pois o fundo é sempre verde escuro no topo)
-                isAppearanceLightStatusBars = false
+                isAppearanceLightStatusBars = false // Ícones brancos no topo
                 isAppearanceLightNavigationBars = !darkTheme
             }
         }
@@ -114,7 +123,7 @@ fun MeuFinanceiroTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = FinanceiroTypography, // Certifique-se que FinanceiroTypography existe no seu Type.kt
+        typography = FinanceiroTypography,
         shapes = FinanceiroShapes,
         content = content
     )
