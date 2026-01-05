@@ -1,6 +1,7 @@
 package com.meufinanceiro.ui.screens
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility // <--- Importante
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -43,8 +44,11 @@ fun RegistrarScreen(
     transacaoId: Long = 0L
 ) {
     val context = LocalContext.current
-    // Configura o Banco
-    val db = remember { Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build() }
+    val db = remember {
+        Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db")
+            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .build()
+    }
 
     val viewModel: RegistrarViewModel = viewModel(
         factory = RegistrarViewModelFactory(
@@ -61,20 +65,22 @@ fun RegistrarScreen(
     var tipo by remember { mutableStateOf(TipoTela.DESPESA) }
     var isSaving by remember { mutableStateOf(false) }
 
-    // Estado do Método de Pagamento (Padrão: Dinheiro)
     var metodoPagamento by remember { mutableStateOf(MetodoPagamento.DINHEIRO) }
+
+    // NOVO: Estado para parcelas (padrão 1)
+    var numeroParcelas by remember { mutableIntStateOf(1) }
 
     // Data
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
     var showDatePicker by remember { mutableStateOf(false) }
 
-    // Cores (Acessibilidade)
+    // Cores
     val corReceita = AcessibilidadeApp.corReceita
     val corDespesa = AcessibilidadeApp.corDespesa
     val corAtiva = if (tipo == TipoTela.RECEITA) corReceita else corDespesa
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
 
-    // --- CARREGAR DADOS (Se for Edição) ---
+    // --- CARREGAR DADOS ---
     LaunchedEffect(transacaoId) {
         if (transacaoId > 0) {
             viewModel.carregarDadosParaEdicao(transacaoId) { transacao, categoria ->
@@ -86,19 +92,19 @@ fun RegistrarScreen(
                 selectedCategory = categoria
                 tipo = if (transacao.tipo == TipoTransacao.RECEITA) TipoTela.RECEITA else TipoTela.DESPESA
 
-                // Tenta carregar o método de pagamento salvo
                 metodoPagamento = try {
                     MetodoPagamento.valueOf(transacao.metodoPagamento)
                 } catch (e: Exception) {
                     MetodoPagamento.DINHEIRO
                 }
+                // Carrega parcelas se existirem
+                numeroParcelas = transacao.totalParcelas
             }
         }
     }
 
     val listaCategorias by viewModel.categorias.collectAsState()
 
-    // Dialog da Data
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -127,7 +133,7 @@ fun RegistrarScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
 
-            // 1. SELETOR DE TIPO (Receita / Despesa)
+            // 1. SELETOR TIPO
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilterChip(
                     selected = tipo == TipoTela.RECEITA,
@@ -178,7 +184,6 @@ fun RegistrarScreen(
                     fontWeight = FontWeight.Bold,
                     color = corAtiva
                 ),
-                // --- CORREÇÃO FUNDO ROSA (TRAVANDO COR BRANCA/SURFACE) ---
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
                     unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
@@ -187,7 +192,7 @@ fun RegistrarScreen(
                 )
             )
 
-            // 3. SELETOR DE FORMA DE PAGAMENTO
+            // 3. PAGAMENTO E PARCELAS
             Column {
                 Text(
                     text = "Forma de Pagamento",
@@ -204,16 +209,13 @@ fun RegistrarScreen(
                     items(opcoes.size) { index ->
                         val metodo = opcoes[index]
                         val isSelected = metodoPagamento == metodo
-
                         val label = metodo.name.lowercase().replaceFirstChar { it.uppercase() }
 
                         FilterChip(
                             selected = isSelected,
                             onClick = { metodoPagamento = metodo },
                             label = { Text(label) },
-                            leadingIcon = {
-                                if (isSelected) Icon(Icons.Rounded.Check, null)
-                            },
+                            leadingIcon = { if (isSelected) Icon(Icons.Rounded.Check, null) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                                 selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -221,9 +223,36 @@ fun RegistrarScreen(
                         )
                     }
                 }
+
+                // --- NOVO: CAMPO DE PARCELAS ---
+                AnimatedVisibility(visible = metodoPagamento == MetodoPagamento.CREDITO) {
+                    var parcelasStr by remember { mutableStateOf("1") }
+
+                    OutlinedTextField(
+                        value = parcelasStr,
+                        onValueChange = {
+                            if (it.all { char -> char.isDigit() } && it.length <= 2) {
+                                parcelasStr = it
+                                numeroParcelas = it.toIntOrNull() ?: 1
+                            }
+                        },
+                        label = { Text("Nº de Parcelas") },
+                        // Ícone numérico genérico ou use FilterKp se preferir
+                        leadingIcon = { Icon(Icons.Rounded.Tag, contentDescription = null) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White,
+                            unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
+                        )
+                    )
+                }
             }
 
-            // 4. CAMPO DATA
+            // 4. DATA
             val dataFormatada = remember(datePickerState.selectedDateMillis) {
                 val millis = datePickerState.selectedDateMillis
                 if (millis != null) {
@@ -305,7 +334,7 @@ fun RegistrarScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // 7. BOTÃO SALVAR (COM CORREÇÃO DE DATA)
+            // 7. BOTÃO SALVAR
             Button(
                 enabled = !isSaving,
                 onClick = {
@@ -315,24 +344,24 @@ fun RegistrarScreen(
                     } else {
                         isSaving = true
 
-                        // --- CORREÇÃO DA DATA AQUI ---
-                        // 1. Pegamos a data selecionada (UTC)
+                        // Ajuste Data
                         val dataSelecionadaUTC = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
-
-                        // 2. Calculamos o fuso horário (ex: -3h)
                         val fusoHorario = TimeZone.getDefault()
                         val offset = fusoHorario.getOffset(dataSelecionadaUTC)
-
-                        // 3. Ajustamos a data para compensar o fuso ao salvar
                         val dataParaSalvar = dataSelecionadaUTC - offset
+
+                        // Lógica para enviar o nº correto de parcelas
+                        // Se NÃO for crédito, forçamos 1 parcela
+                        val parcelasParaSalvar = if (metodoPagamento == MetodoPagamento.CREDITO) numeroParcelas else 1
 
                         viewModel.salvarTransacao(
                             tipoTela = tipo,
                             valor = valorFinal,
-                            dataMillis = dataParaSalvar, // <--- Data corrigida
+                            dataMillis = dataParaSalvar,
                             categoriaId = selectedCategory!!.id,
                             descricao = description,
                             metodoPagamento = metodoPagamento.name,
+                            totalParcelas = parcelasParaSalvar, // <--- NOVO
                             onSuccess = { Toast.makeText(context, "Salvo!", Toast.LENGTH_SHORT).show(); navController.popBackStack() },
                             onError = { isSaving = false }
                         )
@@ -349,7 +378,6 @@ fun RegistrarScreen(
     }
 }
 
-// Utilitários
 fun formatarMoedaVisual(centavosStr: String): String {
     if (centavosStr.isEmpty()) return ""
     val valor = centavosStr.toLongOrNull() ?: 0L

@@ -45,7 +45,9 @@ fun HistoricoScreen(navController: NavController) {
     val isDark = isSystemInDarkTheme()
 
     val db = remember {
-        Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build()
+        Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db")
+            .addMigrations(AppDatabase.MIGRATION_1_2) // <--- OBRIGATÓRIO TER ISSO
+            .build()
     }
     val repository = remember { TransacaoRepository(db.transacaoDao()) }
     val viewModel: HistoricoViewModel = viewModel(factory = HistoricoFactory(repository))

@@ -17,5 +17,7 @@ data class Transacao(
     val categoriaId: Long,
 
     // NOVO CAMPO
-    val metodoPagamento: String = MetodoPagamento.DINHEIRO.name
+    val metodoPagamento: String = MetodoPagamento.DINHEIRO.name,
+    val parcelaAtual: Int = 1,   // Ex: 1 (se for a primeira)
+    val totalParcelas: Int = 1   // Ex: 10 (se foi em 10x)
 )

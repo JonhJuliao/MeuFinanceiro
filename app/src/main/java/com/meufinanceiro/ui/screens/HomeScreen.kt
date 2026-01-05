@@ -56,7 +56,12 @@ fun HomeScreen(navController: NavController) {
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
 
-    val db = remember { Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build() }
+    val db = remember {
+        Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db")
+            .addMigrations(AppDatabase.MIGRATION_1_2) // <--- OBRIGATÓRIO TER ISSO
+            .build()
+    }
+
     val repository = remember { TransacaoRepository(db.transacaoDao()) }
 
     val viewModel: HomeViewModel = viewModel(
