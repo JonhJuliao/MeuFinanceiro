@@ -38,11 +38,12 @@ import com.meufinanceiro.ui.viewmodel.CategoriasViewModelFactory
 @Composable
 fun CategoriasScreen(navController: NavController) {
     val context = LocalContext.current
-    val colors = MaterialTheme.colorScheme // TEMA ATIVO
+    val colors = MaterialTheme.colorScheme
 
     val db = remember {
         Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db")
             .addMigrations(AppDatabase.MIGRATION_1_2)
+            .allowMainThreadQueries()
             .build()
     }
     val catRepo = remember { CategoriaRepository(db.categoriaDao()) }
@@ -54,6 +55,7 @@ fun CategoriasScreen(navController: NavController) {
     var novaCategoria by remember { mutableStateOf("") }
     var novaMeta by remember { mutableStateOf("") }
     var temMeta by remember { mutableStateOf(false) }
+    var showDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -67,74 +69,99 @@ fun CategoriasScreen(navController: NavController) {
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background)
             )
         },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showDialog = true },
+                containerColor = colors.primary,
+                contentColor = colors.onPrimary,
+                shape = CircleShape
+            ) { Icon(Icons.Rounded.Add, null) }
+        },
         containerColor = colors.background
     ) { padding ->
 
         Column(
             modifier = Modifier
                 .padding(padding)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
                 .fillMaxSize()
         ) {
 
-            // CARD DE CRIAÇÃO
-            Card(
-                colors = CardDefaults.cardColors(containerColor = colors.surface),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(0.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+            if (listaComProgresso.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Nenhuma categoria cadastrada", color = colors.onSurfaceVariant)
+                }
+            } else {
+                Text(
+                    "Suas Categorias",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    color = colors.onBackground
+                )
+
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
-                    Text("Nova Categoria", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = colors.onSurface)
-
-                    OutlinedTextField(
-                        value = novaCategoria,
-                        onValueChange = { novaCategoria = it },
-                        label = { Text("Nome (Ex: Mercado)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = colors.background,
-                            unfocusedContainerColor = colors.background,
-                            focusedTextColor = colors.onSurface,
-                            unfocusedTextColor = colors.onSurface,
-                            cursorColor = colors.primary,
-                            focusedBorderColor = colors.primary,
-                            unfocusedBorderColor = colors.outline
-                        )
-                    )
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().clickable { temMeta = !temMeta }
-                    ) {
-                        Checkbox(checked = temMeta, onCheckedChange = { temMeta = it }, colors = CheckboxDefaults.colors(checkedColor = colors.primary))
-                        Text("Definir um limite de gastos (Meta)", fontSize = 14.sp, color = colors.onSurface)
+                    items(listaComProgresso) { item ->
+                        CategoriaProgressoCard(item = item, onDelete = { viewModel.deletarCategoria(item.categoria) })
                     }
+                }
+            }
+        }
 
-                    AnimatedVisibility(visible = temMeta) {
+        // DIALOG DE CRIAÇÃO
+        if (showDialog) {
+            AlertDialog(
+                onDismissRequest = { showDialog = false },
+                containerColor = colors.surface,
+                title = { Text("Nova Categoria", color = colors.onSurface) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedTextField(
-                            value = novaMeta,
-                            onValueChange = { if (it.all { char -> char.isDigit() || char == '.' }) novaMeta = it },
-                            label = { Text("Valor da Meta (R$)") },
-                            placeholder = { Text("0.00") },
+                            value = novaCategoria,
+                            onValueChange = { novaCategoria = it },
+                            label = { Text("Nome (Ex: Lazer, Mercado)") },
                             singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = colors.background,
-                                unfocusedContainerColor = colors.background,
                                 focusedTextColor = colors.onSurface,
                                 unfocusedTextColor = colors.onSurface,
-                                focusedBorderColor = colors.primary
+                                focusedBorderColor = colors.primary,
+                                unfocusedBorderColor = colors.outline
                             )
                         )
-                    }
 
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable { temMeta = !temMeta }
+                        ) {
+                            Checkbox(
+                                checked = temMeta,
+                                onCheckedChange = { temMeta = it },
+                                colors = CheckboxDefaults.colors(checkedColor = colors.primary)
+                            )
+                            Text("Definir meta de gastos?", fontSize = 14.sp, color = colors.onSurface)
+                        }
+
+                        AnimatedVisibility(visible = temMeta) {
+                            OutlinedTextField(
+                                value = novaMeta,
+                                onValueChange = { if (it.all { char -> char.isDigit() || char == '.' }) novaMeta = it },
+                                label = { Text("Valor da Meta (R$)") },
+                                placeholder = { Text("0.00") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = colors.onSurface,
+                                    unfocusedTextColor = colors.onSurface,
+                                    focusedBorderColor = colors.primary
+                                )
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
                     Button(
                         onClick = {
                             val nome = novaCategoria.trim()
@@ -144,31 +171,18 @@ fun CategoriasScreen(navController: NavController) {
                                 novaCategoria = ""
                                 novaMeta = ""
                                 temMeta = false
+                                showDialog = false
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary)
-                    ) {
-                        Icon(Icons.Rounded.Add, null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Criar Categoria")
+                    ) { Text("Salvar") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDialog = false }) {
+                        Text("Cancelar", color = colors.onSurfaceVariant)
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text("Suas Categorias", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(bottom = 12.dp), color = colors.onBackground)
-
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 24.dp)
-            ) {
-                items(listaComProgresso) { item ->
-                    CategoriaProgressoCard(item = item, onDelete = { viewModel.deletarCategoria(item.categoria) })
-                }
-            }
+            )
         }
     }
 }
@@ -196,7 +210,12 @@ fun CategoriaProgressoCard(item: CategoriaComProgresso, onDelete: () -> Unit) {
                         modifier = Modifier.size(40.dp).clip(CircleShape).background(colors.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(imageVector = getIconeCategoriaLocal(categoria.nome), contentDescription = null, tint = colors.onSurfaceVariant)
+                        // USA A NOVA FUNÇÃO CORRIGIDA
+                        Icon(
+                            imageVector = getIconeCategoriaFinal(categoria.nome),
+                            contentDescription = null,
+                            tint = colors.onSurfaceVariant
+                        )
                     }
 
                     Spacer(modifier = Modifier.width(12.dp))
@@ -215,12 +234,11 @@ fun CategoriaProgressoCard(item: CategoriaComProgresso, onDelete: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
 
             if (temMeta) {
-                // Progresso com cor de fundo visível no dark mode
                 LinearProgressIndicator(
                     progress = { item.progresso },
                     modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                    color = if(item.corStatus == Color.Red) colors.error else colors.primary, // Usa cores do tema
-                    trackColor = colors.surfaceVariant,
+                    color = if(item.corStatus == Color.Red) colors.error else colors.primary,
+                    trackColor = colors.surfaceVariant.copy(alpha = 0.3f),
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
@@ -234,29 +252,63 @@ fun CategoriaProgressoCard(item: CategoriaComProgresso, onDelete: () -> Unit) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(colors.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .background(colors.surfaceVariant.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
                         .padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Icon(Icons.Rounded.Edit, null, modifier = Modifier.size(14.dp), tint = colors.primary)
+                    Icon(Icons.Rounded.TrendingUp, null, modifier = Modifier.size(14.dp), tint = colors.onSurfaceVariant)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Toque para definir uma meta", fontSize = 12.sp, color = colors.primary)
+                    Text("Esta categoria não tem limite", fontSize = 12.sp, color = colors.onSurfaceVariant)
                 }
             }
         }
     }
 }
 
-private fun getIconeCategoriaLocal(nome: String): ImageVector {
-    val nomeLimpo = nome.trim().lowercase()
+// --- FUNÇÃO FINAL E CORRIGIDA (CHECA OS NOMES GENÉRICOS) ---
+private fun getIconeCategoriaFinal(nome: String): ImageVector {
+    val n = nome.trim().lowercase()
+
     return when {
-        nomeLimpo.contains("mercado") || nomeLimpo.contains("compras") -> Icons.Rounded.ShoppingCart
-        nomeLimpo.contains("uber") || nomeLimpo.contains("transporte") -> Icons.Rounded.DirectionsCar
-        nomeLimpo.contains("ifood") || nomeLimpo.contains("restaurante") || nomeLimpo.contains("lanche") -> Icons.Rounded.Restaurant
-        nomeLimpo.contains("internet") || nomeLimpo.contains("wifi") -> Icons.Rounded.Wifi
-        nomeLimpo.contains("casa") || nomeLimpo.contains("luz") || nomeLimpo.contains("aluguel") -> Icons.Rounded.Home
-        nomeLimpo.contains("saude") || nomeLimpo.contains("farmacia") -> Icons.Rounded.LocalPharmacy
+        // 1. ACADEMIA / ESPORTE (Prioridade para não confundir com Saúde)
+        n.contains("academia") || n.contains("treino") || n.contains("fit") || n.contains("gym") || n.contains("esporte") || n.contains("cross") -> Icons.Rounded.FitnessCenter
+
+        // 2. ASSINATURAS / STREAMING
+        n.contains("assinatura") || n.contains("stream") || n.contains("netflix") || n.contains("spotify") || n.contains("prime") || n.contains("disney") -> Icons.Rounded.PlayCircle
+
+        // 3. EDUCAÇÃO
+        n.contains("educ") || n.contains("escola") || n.contains("faculdade") || n.contains("curso") || n.contains("estudo") || n.contains("livro") -> Icons.Rounded.School
+
+        // 4. ALIMENTAÇÃO
+        n.contains("aliment") || n.contains("refeic") || n.contains("restaurante") || n.contains("jantar") || n.contains("almoco") || n.contains("lanche") || n.contains("ifood") || n.contains("comida") || n.contains("mercado") || n.contains("compra") -> Icons.Rounded.Restaurant
+
+        // 5. LAZER
+        n.contains("lazer") || n.contains("diversao") || n.contains("entretenimento") || n.contains("cinema") || n.contains("filme") || n.contains("jogo") || n.contains("passeio") -> Icons.Rounded.LocalActivity
+
+        // 6. MORADIA
+        n.contains("moradia") || n.contains("habitacao") || n.contains("casa") || n.contains("aluguel") || n.contains("condominio") -> Icons.Rounded.Home
+
+        // 7. TRANSPORTE
+        n.contains("transporte") || n.contains("locomocao") || n.contains("veiculo") || n.contains("uber") || n.contains("taxi") || n.contains("onibus") || n.contains("combustivel") || n.contains("gasolina") || n.contains("carro") || n.contains("moto") -> Icons.Rounded.DirectionsCar
+
+        // 8. CONTAS GERAIS
+        n.contains("conta") || n.contains("boleto") || n.contains("pagamento") || n.contains("fatura") || n.contains("internet") || n.contains("luz") || n.contains("agua") || n.contains("celular") -> Icons.Rounded.ReceiptLong
+
+        // 9. SAÚDE
+        n.contains("saude") || n.contains("saúde") || n.contains("medico") || n.contains("hospital") || n.contains("farmacia") || n.contains("remedio") -> Icons.Rounded.LocalHospital
+
+        // 10. TRABALHO / RENDA
+        n.contains("free") || n.contains("salario") || n.contains("salário") || n.contains("renda") || n.contains("trabalho") || n.contains("provento") || n.contains("bico") -> Icons.Rounded.Work
+
+        // 11. INVESTIMENTO
+        n.contains("invest") || n.contains("poupanca") || n.contains("aplicacao") || n.contains("cdb") -> Icons.Rounded.TrendingUp
+
+        // OUTROS
+        n.contains("viagem") || n.contains("ferias") -> Icons.Rounded.Flight
+        n.contains("roupa") || n.contains("vest") || n.contains("loja") -> Icons.Rounded.Checkroom
+        n.contains("pet") || n.contains("animal") -> Icons.Rounded.Pets
+
         else -> Icons.Rounded.Category
     }
 }

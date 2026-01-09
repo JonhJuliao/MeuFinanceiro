@@ -15,7 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -32,22 +31,22 @@ import com.meufinanceiro.backend.repository.TransacaoRepository
 import com.meufinanceiro.navigation.Screen
 import com.meufinanceiro.ui.extensions.categoriaNome
 import com.meufinanceiro.ui.extensions.toCurrency
-import com.meufinanceiro.ui.theme.AcessibilidadeApp
 import com.meufinanceiro.ui.viewmodel.HomeViewModel
 import com.meufinanceiro.ui.viewmodel.HomeViewModelFactory
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import java.text.SimpleDateFormat
 
 @Composable
 fun HomeScreen(navController: NavController) {
     val context = LocalContext.current
-    val colors = MaterialTheme.colorScheme // Puxa do seu Theme.kt (Cores Cyber/Soft Dark)
+    val colors = MaterialTheme.colorScheme
 
-    // Configuração do Banco
+    // Configuração do Banco (Modo Seguro)
     val db = remember {
         Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db")
             .addMigrations(AppDatabase.MIGRATION_1_2)
+            .allowMainThreadQueries()
             .build()
     }
     val repository = remember { TransacaoRepository(db.transacaoDao()) }
@@ -65,39 +64,44 @@ fun HomeScreen(navController: NavController) {
     var showBalance by remember { mutableStateOf(true) }
     var showProfileSettingsDialog by remember { mutableStateOf(false) }
     var tempName by remember { mutableStateOf("") }
-
-    // ESTADO PARA O POP-UP DE PARCELAS
     var transacaoParaDetalhes by remember { mutableStateOf<TransacaoComCategoria?>(null) }
 
     val nomeExibicao = if (nomeUsuarioRaw.isBlank()) "Usuário" else nomeUsuarioRaw
 
-    // Cálculos para o Card
-    val despesasTotais = ultimasTransacoes
-        .filter { it.transacao.tipo == TipoTransacao.DESPESA }
-        .sumOf { it.transacao.valor }
+    // --- CÁLCULOS INTELIGENTES ---
+    val despesasTotais by remember(ultimasTransacoes) {
+        derivedStateOf {
+            ultimasTransacoes
+                .filter { it.transacao.tipo == TipoTransacao.DESPESA }
+                .sumOf { it.transacao.valor }
+        }
+    }
 
-    val maiorGasto = ultimasTransacoes
-        .filter { it.transacao.tipo == TipoTransacao.DESPESA }
-        .maxByOrNull { it.transacao.valor }
+    val maiorGasto by remember(ultimasTransacoes) {
+        derivedStateOf {
+            ultimasTransacoes
+                .filter { it.transacao.tipo == TipoTransacao.DESPESA }
+                .maxByOrNull { it.transacao.valor }
+        }
+    }
 
-    // --- DIALOG DE PERFIL ---
+    // Barra de progresso dinâmica
+    val progressoBarra = remember(despesasTotais, saldo) {
+        if (saldo <= 0) 1f else (despesasTotais / (despesasTotais + saldo)).toFloat().coerceIn(0f, 1f)
+    }
+
+    // --- DIALOGS ---
     if (showProfileSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showProfileSettingsDialog = false },
             title = { Text("Configurar Perfil") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    OutlinedTextField(
-                        value = tempName,
-                        onValueChange = { tempName = it },
-                        label = { Text("Seu Nome") },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = colors.onSurface,
-                            unfocusedTextColor = colors.onSurface
-                        )
-                    )
-                }
+                OutlinedTextField(
+                    value = tempName,
+                    onValueChange = { tempName = it },
+                    label = { Text("Seu Nome") },
+                    singleLine = true
+                )
             },
             confirmButton = {
                 Button(onClick = {
@@ -105,33 +109,24 @@ fun HomeScreen(navController: NavController) {
                     showProfileSettingsDialog = false
                 }) { Text("Salvar") }
             },
-            dismissButton = { TextButton(onClick = { showProfileSettingsDialog = false }) { Text("Cancelar") } },
-            containerColor = colors.surface,
-            titleContentColor = colors.onSurface,
-            textContentColor = colors.onSurfaceVariant
+            dismissButton = { TextButton(onClick = { showProfileSettingsDialog = false }) { Text("Cancelar") } }
         )
     }
 
-    // --- DIALOG DE PARCELAS ---
     if (transacaoParaDetalhes != null) {
-        ParcelamentoDialog(
-            transacao = transacaoParaDetalhes!!,
-            onDismiss = { transacaoParaDetalhes = null }
-        )
+        ParcelamentoDialog(transacao = transacaoParaDetalhes!!, onDismiss = { transacaoParaDetalhes = null })
     }
 
-    // --- TELA PRINCIPAL ---
+    // --- UI PRINCIPAL ---
     Scaffold(
-        containerColor = colors.background, // Fundo ajustado (CyberBlack)
+        containerColor = colors.background,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate(Screen.Registrar.route) },
                 containerColor = colors.primary,
                 contentColor = colors.onPrimary,
                 shape = CircleShape
-            ) {
-                Icon(Icons.Rounded.Add, contentDescription = "Nova Transação")
-            }
+            ) { Icon(Icons.Rounded.Add, "Nova Transação") }
         }
     ) { padding ->
         Column(
@@ -142,12 +137,10 @@ fun HomeScreen(navController: NavController) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-
-            // 1. CARD DE SALDO TOTAL
+            // CARD DE SALDO
             Card(
                 colors = CardDefaults.cardColors(containerColor = colors.surface),
-                shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(0.dp)
+                shape = RoundedCornerShape(24.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Row(
@@ -155,180 +148,96 @@ fun HomeScreen(navController: NavController) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.clickable {
-                            tempName = nomeUsuarioRaw
-                            showProfileSettingsDialog = true
-                        }) {
-                            Text("Olá, $nomeExibicao", color = colors.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Column(modifier = Modifier.clickable { tempName = nomeUsuarioRaw; showProfileSettingsDialog = true }) {
+                            Text("Olá, $nomeExibicao", color = colors.onSurface, fontWeight = FontWeight.Bold)
                             Text("Saldo atual", color = colors.onSurfaceVariant, fontSize = 12.sp)
                         }
-
                         Icon(
                             imageVector = if (showBalance) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
                             contentDescription = null,
-                            tint = colors.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp).clickable { showBalance = !showBalance }
+                            modifier = Modifier.clickable { showBalance = !showBalance },
+                            tint = colors.onSurfaceVariant
                         )
                     }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    val corValor = if (saldo < 0) colors.error else colors.primary
-
                     Text(
                         text = if (showBalance) saldo.toCurrency() else "R$ •••••",
-                        fontSize = 36.sp,
+                        fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (showBalance) corValor else colors.onSurface
+                        color = if (showBalance && saldo < 0) colors.error else colors.primary
                     )
                 }
             }
 
-            // 2. CARD DE RESUMO DO MÊS
+            // CARD DE RESUMO
             Card(
                 colors = CardDefaults.cardColors(containerColor = colors.surface),
-                shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(0.dp)
+                shape = RoundedCornerShape(24.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text("Resumo rápido", color = colors.onSurfaceVariant, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.weight(1.2f)) {
                             Text("Gastos", fontSize = 12.sp, color = colors.onSurfaceVariant)
-                            Text(despesasTotais.toCurrency(), fontWeight = FontWeight.Bold, fontSize = 22.sp, color = colors.primary)
-
+                            Text(despesasTotais.toCurrency(), fontWeight = FontWeight.Bold, fontSize = 20.sp, color = colors.primary)
                             Spacer(modifier = Modifier.height(8.dp))
-
                             LinearProgressIndicator(
-                                progress = { 0.58f },
+                                progress = { progressoBarra },
                                 modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
                                 color = colors.primary,
-                                trackColor = colors.onSurface.copy(alpha = 0.1f),
+                                trackColor = colors.onSurface.copy(alpha = 0.1f)
                             )
                         }
-
                         Spacer(modifier = Modifier.width(16.dp))
-
                         Column(modifier = Modifier.weight(0.8f)) {
                             Text("Maior gasto", fontSize = 12.sp, color = colors.onSurfaceVariant)
                             if (maiorGasto != null) {
-                                Text(maiorGasto.transacao.valor.toCurrency(), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = colors.onSurface)
-                                Text(maiorGasto.categoriaNome, fontSize = 12.sp, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            } else {
-                                Text("-", fontWeight = FontWeight.Bold, color = colors.onSurface)
-                            }
+                                Text(maiorGasto!!.transacao.valor.toCurrency(), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Text(maiorGasto!!.categoriaNome, fontSize = 11.sp, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            } else { Text("-", color = colors.onSurfaceVariant) }
                         }
                     }
                 }
             }
 
-            // 3. AÇÕES RÁPIDAS
-            Text(
-                "Ações Rápidas",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = colors.onBackground
-            )
-
+            // AÇÕES RÁPIDAS
+            Text("Ações Rápidas", fontWeight = FontWeight.Bold, color = colors.onBackground)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                item {
-                    BigActionButton(
-                        icon = Icons.Rounded.History,
-                        label = "Extrato",
-                        modifier = Modifier.weight(1f),
-                        colors = colors,
-                        onClick = { navController.navigate(Screen.Historico.route) }
-                    )
-                }
-                item {
-                    BigActionButton(
-                        icon = Icons.Rounded.PieChart,
-                        label = "Resumo",
-                        modifier = Modifier.weight(1f),
-                        colors = colors,
-                        onClick = { navController.navigate(Screen.Resumo.route) }
-                    )
-                }
-                item {
-                    BigActionButton(
-                        icon = Icons.Rounded.Settings,
-                        label = "Metas",
-                        modifier = Modifier.weight(1f),
-                        colors = colors,
-                        onClick = { navController.navigate(Screen.Categorias.route) }
-                    )
-                }
+                item { BigActionButton(Icons.Rounded.History, "Extrato", colors) { navController.navigate(Screen.Historico.route) } }
+                item { BigActionButton(Icons.Rounded.PieChart, "Resumo", colors) { navController.navigate(Screen.Resumo.route) } }
+                item { BigActionButton(Icons.Rounded.Settings, "Metas", colors) { navController.navigate(Screen.Categorias.route) } }
             }
 
-            // 4. LISTA DE MOVIMENTAÇÕES
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Últimas Movimentações", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = colors.onBackground)
-
-                Text(
-                    "Ver extrato >",
-                    fontSize = 12.sp,
-                    color = colors.primary,
-                    modifier = Modifier.clickable { navController.navigate(Screen.Historico.route) }
-                )
-            }
-
+            // LISTA DE MOVIMENTAÇÕES
+            Text("Últimas Movimentações", fontWeight = FontWeight.Bold, color = colors.onBackground)
             if (ultimasTransacoes.isEmpty()) {
-                Box(modifier = Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
-                    Text("Nenhuma movimentação", color = colors.onSurfaceVariant)
-                }
+                Text("Nenhuma movimentação", modifier = Modifier.padding(16.dp), color = colors.onSurfaceVariant)
             } else {
-                // Mostra apenas as 5 últimas na Home
                 ultimasTransacoes.take(5).forEach { item ->
-                    TransacaoItemStyleDark(
-                        item = item,
-                        colors = colors,
-                        onClick = {
-                            if (item.transacao.totalParcelas > 1) {
-                                transacaoParaDetalhes = item
-                            }
-                        }
-                    )
+                    TransacaoItemStyleDark(item, colors) {
+                        if (item.transacao.totalParcelas > 1) transacaoParaDetalhes = item
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(60.dp))
         }
     }
 }
 
-// --- COMPONENTES VISUAIS ---
+// ==========================================
+// FUNÇÕES AUXILIARES E COMPONENTES
+// ==========================================
 
 @Composable
-fun BigActionButton(
-    icon: ImageVector,
-    label: String,
-    modifier: Modifier = Modifier,
-    colors: ColorScheme,
-    onClick: () -> Unit
-) {
+fun BigActionButton(icon: ImageVector, label: String, colors: ColorScheme, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = colors.surface),
-        shape = RoundedCornerShape(16.dp),
-        modifier = modifier.height(80.dp)
+        modifier = Modifier.size(100.dp, 80.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(12.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(icon, null, tint = colors.primary, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
+        Column(Modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
+            Icon(icon, null, tint = colors.primary)
+            Text(label, fontSize = 12.sp, color = colors.onSurface)
         }
     }
 }
@@ -341,18 +250,26 @@ fun TransacaoItemStyleDark(
 ) {
     val isReceita = item.transacao.tipo == TipoTransacao.RECEITA
 
+    // Formatação de data (simples)
+    val dataFormatada = remember(item.transacao.dataMillis) {
+        val cal = Calendar.getInstance()
+        cal.timeInMillis = item.transacao.dataMillis
+        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).format(cal.time)
+    }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = colors.surface),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
+            .padding(vertical = 4.dp) // Espaçamento entre itens
             .clickable { onClick() }
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Ícone Círculo
+            // ÍCONE
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -370,14 +287,33 @@ fun TransacaoItemStyleDark(
 
             Spacer(modifier = Modifier.width(12.dp))
 
+            // TEXTOS (MEIO) - AQUI ESTAVA O BUG!
+            // Adicionei maxLines = 1 e Ellipsis para cortar texto grande
             Column(modifier = Modifier.weight(1f)) {
-                Text(item.categoriaNome, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = colors.onSurface)
+                Text(
+                    text = item.categoriaNome,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = colors.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
                 val desc = item.transacao.descricao
                 if (!desc.isNullOrBlank()) {
-                    Text(desc, fontSize = 12.sp, color = colors.onSurfaceVariant)
+                    Text(
+                        text = desc,
+                        fontSize = 12.sp,
+                        color = colors.onSurfaceVariant,
+                        maxLines = 1, // <--- IMPORTANTE: Não deixa quebrar linha
+                        overflow = TextOverflow.Ellipsis // <--- IMPORTANTE: Coloca "..."
+                    )
                 }
             }
 
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // VALOR E DATA (DIREITA)
             Column(horizontalAlignment = Alignment.End) {
                 if (item.transacao.totalParcelas > 1) {
                     Box(
@@ -385,7 +321,12 @@ fun TransacaoItemStyleDark(
                             .background(colors.primaryContainer, RoundedCornerShape(4.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
-                        Text("Parcelado ${item.transacao.parcelaAtual}/${item.transacao.totalParcelas}", fontSize = 10.sp, color = colors.onPrimaryContainer, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Parcelado ${item.transacao.parcelaAtual}/${item.transacao.totalParcelas}",
+                            fontSize = 10.sp,
+                            color = colors.onPrimaryContainer,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                 }
@@ -396,12 +337,17 @@ fun TransacaoItemStyleDark(
                     fontSize = 14.sp,
                     color = if (isReceita) colors.primary else colors.error
                 )
+
+                Text(
+                    text = dataFormatada,
+                    fontSize = 11.sp,
+                    color = colors.onSurfaceVariant
+                )
             }
         }
     }
 }
 
-// --- POPUP DE PARCELAS ---
 @Composable
 fun ParcelamentoDialog(
     transacao: TransacaoComCategoria,
@@ -429,77 +375,28 @@ fun ParcelamentoDialog(
         containerColor = colors.surface,
         title = {
             Column {
-                Text(
-                    text = transacao.categoriaNome,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.onSurface
-                )
-                Text(
-                    text = "Cronograma de Pagamento",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.onSurfaceVariant
-                )
+                Text(transacao.categoriaNome, fontWeight = FontWeight.Bold, color = colors.onSurface)
+                Text("Cronograma", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             }
         },
         text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 300.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 listaParcelas.forEach { (numero, data) ->
-                    val isPassada = numero < transacao.transacao.parcelaAtual
                     val isAtual = numero == transacao.transacao.parcelaAtual
-
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isAtual) colors.primary
-                                        else if (isPassada) colors.primary.copy(alpha = 0.3f)
-                                        else colors.onSurfaceVariant.copy(alpha = 0.2f)
-                                    )
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "${numero}ª Parcela",
-                                color = if (isAtual) colors.primary else colors.onSurface,
-                                fontWeight = if (isAtual) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-
-                        Text(
-                            text = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).format(data),
-                            color = if (isAtual) colors.onSurface else colors.onSurfaceVariant,
-                            fontWeight = if (isAtual) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-                    if (numero < listaParcelas.size) {
-                        HorizontalDivider(color = colors.onSurface.copy(alpha = 0.1f))
+                        Text("${numero}ª Parcela", color = if (isAtual) colors.primary else colors.onSurface, fontWeight = if (isAtual) FontWeight.Bold else FontWeight.Normal)
+                        Text(SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).format(data), color = colors.onSurfaceVariant)
                     }
                 }
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Fechar", color = colors.primary)
-            }
-        }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Fechar") } }
     )
 }
 
-// Função de ícones (Expandida)
 private fun getIconePorCategoria(nome: String): ImageVector {
     val nomeLimpo = nome.trim().lowercase()
     return when {

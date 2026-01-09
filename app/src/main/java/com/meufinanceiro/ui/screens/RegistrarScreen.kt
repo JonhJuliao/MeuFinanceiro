@@ -48,11 +48,12 @@ fun RegistrarScreen(
     transacaoId: Long = 0L
 ) {
     val context = LocalContext.current
-    val colors = MaterialTheme.colorScheme // TEMA ATIVO
+    val colors = MaterialTheme.colorScheme
 
     val db = remember {
         Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db")
             .addMigrations(AppDatabase.MIGRATION_1_2)
+            .allowMainThreadQueries()
             .build()
     }
 
@@ -74,8 +75,6 @@ fun RegistrarScreen(
 
     var metodoPagamento by remember { mutableStateOf(MetodoPagamento.DINHEIRO) }
     var numeroParcelas by remember { mutableIntStateOf(1) }
-
-    // NOVO: Controle de fatura fechada
     var isFaturaFechada by remember { mutableStateOf(false) }
 
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
@@ -92,12 +91,9 @@ fun RegistrarScreen(
                 nome.contains("uber") || nome.contains("ifood") ||
                         nome.contains("amazon") || nome.contains("netflix") ||
                         nome.contains("assinatura") -> MetodoPagamento.CREDITO
-
                 nome.contains("mercado") || nome.contains("farmacia") ||
                         nome.contains("internet") -> MetodoPagamento.DEBITO
-
                 nome.contains("padaria") || nome.contains("onibus") -> MetodoPagamento.DINHEIRO
-
                 else -> null
             }
             if (novoMetodo != null) metodoPagamento = novoMetodo
@@ -121,12 +117,53 @@ fun RegistrarScreen(
         }
     }
 
+    // --- CALENDÁRIO CORRIGIDO (SEM ERRO DE COMPILAÇÃO) ---
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
-            confirmButton = { TextButton(onClick = { showDatePicker = false }) { Text("OK") } },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancelar") } }
-        ) { DatePicker(state = datePickerState) }
+            confirmButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("OK", color = colors.primary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancelar", color = colors.onSurfaceVariant)
+                }
+            },
+            colors = DatePickerDefaults.colors(
+                containerColor = colors.surface, // Fundo do Dialog
+            )
+        ) {
+            DatePicker(
+                state = datePickerState,
+                colors = DatePickerDefaults.colors(
+                    containerColor = colors.surface, // Fundo do DatePicker
+
+                    // Textos
+                    titleContentColor = colors.onSurface,
+                    headlineContentColor = colors.onSurface,
+                    weekdayContentColor = colors.onSurface,
+                    subheadContentColor = colors.onSurface,
+                    yearContentColor = colors.onSurface,
+
+                    // Ano Selecionado
+                    currentYearContentColor = colors.primary,
+                    selectedYearContentColor = colors.onPrimary,
+                    selectedYearContainerColor = colors.primary,
+
+                    // Dias
+                    dayContentColor = colors.onSurface,
+                    disabledDayContentColor = colors.onSurface.copy(alpha = 0.38f),
+                    selectedDayContentColor = colors.onPrimary,
+                    selectedDayContainerColor = colors.primary,
+
+                    // Hoje
+                    todayContentColor = colors.primary,
+                    todayDateBorderColor = colors.primary
+                )
+            )
+        }
     }
 
     Scaffold(
@@ -150,22 +187,14 @@ fun RegistrarScreen(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
             // ABAS
             Row(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(colors.surface),
+                modifier = Modifier.padding(16.dp).fillMaxWidth().height(48.dp)
+                    .clip(RoundedCornerShape(24.dp)).background(colors.surface),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .padding(4.dp)
+                    modifier = Modifier.weight(1f).fillMaxHeight().padding(4.dp)
                         .clip(RoundedCornerShape(20.dp))
                         .background(if (tipo == TipoTela.DESPESA) colors.error.copy(alpha = 0.2f) else Color.Transparent)
                         .clickable { tipo = TipoTela.DESPESA },
@@ -173,10 +202,7 @@ fun RegistrarScreen(
                 ) { Text("Despesa", color = if (tipo == TipoTela.DESPESA) colors.error else colors.onSurfaceVariant, fontWeight = FontWeight.Bold) }
 
                 Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .padding(4.dp)
+                    modifier = Modifier.weight(1f).fillMaxHeight().padding(4.dp)
                         .clip(RoundedCornerShape(20.dp))
                         .background(if (tipo == TipoTela.RECEITA) colors.primary.copy(alpha = 0.2f) else Color.Transparent)
                         .clickable { tipo = TipoTela.RECEITA },
@@ -198,19 +224,12 @@ fun RegistrarScreen(
                         amountTextFieldValue = TextFieldValue(text = formatado, selection = TextRange(formatado.length))
                     }
                 },
-                textStyle = LocalTextStyle.current.copy(
-                    fontSize = 40.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    color = corAtiva
-                ),
+                textStyle = LocalTextStyle.current.copy(fontSize = 40.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = corAtiva),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
+                    focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -221,11 +240,9 @@ fun RegistrarScreen(
             Card(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = colors.surface),
-                elevation = CardDefaults.cardElevation(0.dp)
+                colors = CardDefaults.cardColors(containerColor = colors.surface)
             ) {
                 Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-
                     // PAGAMENTO
                     Column {
                         Text("Pagamento", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
@@ -252,10 +269,9 @@ fun RegistrarScreen(
                             }
                         }
 
-                        // ÁREA DO CRÉDITO: PARCELAS E VENCIMENTO
+                        // CRÉDITO
                         AnimatedVisibility(visible = metodoPagamento == MetodoPagamento.CREDITO) {
                             Column(modifier = Modifier.padding(top = 12.dp)) {
-                                // Parcelas
                                 var parcelasStr by remember { mutableStateOf("1") }
                                 OutlinedTextField(
                                     value = parcelasStr,
@@ -266,29 +282,17 @@ fun RegistrarScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(12.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = corAtiva,
-                                        unfocusedBorderColor = colors.outline,
-                                        focusedTextColor = colors.onSurface,
-                                        unfocusedTextColor = colors.onSurface
+                                        focusedBorderColor = corAtiva, unfocusedBorderColor = colors.outline,
+                                        focusedTextColor = colors.onSurface, unfocusedTextColor = colors.onSurface
                                     )
                                 )
-
                                 Spacer(modifier = Modifier.height(12.dp))
-
-                                // NOVO: Toggle de Fatura Fechada
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(colors.background, RoundedCornerShape(12.dp))
-                                        .clickable { isFaturaFechada = !isFaturaFechada }
-                                        .padding(12.dp)
+                                    modifier = Modifier.fillMaxWidth().background(colors.background, RoundedCornerShape(12.dp))
+                                        .clickable { isFaturaFechada = !isFaturaFechada }.padding(12.dp)
                                 ) {
-                                    Checkbox(
-                                        checked = isFaturaFechada,
-                                        onCheckedChange = { isFaturaFechada = it },
-                                        colors = CheckboxDefaults.colors(checkedColor = corAtiva)
-                                    )
+                                    Checkbox(checked = isFaturaFechada, onCheckedChange = { isFaturaFechada = it }, colors = CheckboxDefaults.colors(checkedColor = corAtiva))
                                     Column {
                                         Text("Fatura já fechou?", fontWeight = FontWeight.Bold, color = colors.onSurface)
                                         Text("Pagar no mês que vem", fontSize = 12.sp, color = colors.onSurfaceVariant)
@@ -297,46 +301,47 @@ fun RegistrarScreen(
                             }
                         }
                     }
-
                     HorizontalDivider(color = colors.outline.copy(alpha = 0.2f))
 
                     // DATA
                     val dataFormatada = remember(datePickerState.selectedDateMillis, isFaturaFechada, metodoPagamento) {
                         val millisOriginal = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
-                        val cal = Calendar.getInstance()
-                        cal.timeInMillis = millisOriginal
+                        val calUTC = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+                        calUTC.timeInMillis = millisOriginal
 
-                        // Simula visualmente a data de pagamento
+                        val calLocal = Calendar.getInstance()
+                        calLocal.set(
+                            calUTC.get(Calendar.YEAR),
+                            calUTC.get(Calendar.MONTH),
+                            calUTC.get(Calendar.DAY_OF_MONTH),
+                            12, 0, 0
+                        )
+
                         if (metodoPagamento == MetodoPagamento.CREDITO && isFaturaFechada) {
-                            cal.add(Calendar.MONTH, 1)
+                            calLocal.add(Calendar.MONTH, 1)
                         }
-
                         val formatter = SimpleDateFormat("dd 'de' MMMM, yyyy", Locale("pt", "BR"))
-                        formatter.format(cal.time)
+                        formatter.format(calLocal.time)
                     }
 
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.CalendarToday, null, tint = colors.onSurfaceVariant)
                             Spacer(modifier = Modifier.width(12.dp))
                             Text("Data da Compra", color = colors.onSurfaceVariant)
                         }
-                        // Mostra data recalculada se for crédito fechado
                         Text(dataFormatada, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
                     }
-
                     HorizontalDivider(color = colors.outline.copy(alpha = 0.2f))
 
                     // CATEGORIA
                     var expanded by remember { mutableStateOf(false) }
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable { expanded = true },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.Category, null, tint = colors.onSurfaceVariant)
@@ -359,7 +364,6 @@ fun RegistrarScreen(
                             }
                         }
                     }
-
                     HorizontalDivider(color = colors.outline.copy(alpha = 0.2f))
 
                     // DESCRIÇÃO
@@ -371,12 +375,9 @@ fun RegistrarScreen(
                             onValueChange = { description = it },
                             placeholder = { Text("Descrição (Opcional)", color = colors.onSurfaceVariant.copy(alpha = 0.5f)) },
                             colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                focusedTextColor = colors.onSurface,
-                                unfocusedTextColor = colors.onSurface
+                                focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                                focusedTextColor = colors.onSurface, unfocusedTextColor = colors.onSurface
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -396,26 +397,30 @@ fun RegistrarScreen(
                     } else {
                         isSaving = true
 
-                        // LÓGICA DE DATA INTELIGENTE
-                        val cal = Calendar.getInstance()
-                        cal.timeInMillis = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
+                        val timestampUTC = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
+                        val calUTC = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+                        calUTC.timeInMillis = timestampUTC
 
-                        // Se for crédito e fatura fechada, joga para o próximo mês
+                        val calLocal = Calendar.getInstance()
+                        calLocal.set(
+                            calUTC.get(Calendar.YEAR),
+                            calUTC.get(Calendar.MONTH),
+                            calUTC.get(Calendar.DAY_OF_MONTH),
+                            12, 0, 0
+                        )
+
                         if (metodoPagamento == MetodoPagamento.CREDITO && isFaturaFechada) {
-                            cal.add(Calendar.MONTH, 1)
+                            calLocal.add(Calendar.MONTH, 1)
                         }
-
-                        val dataParaSalvar = cal.timeInMillis
-                        val parcelasParaSalvar = if (metodoPagamento == MetodoPagamento.CREDITO) numeroParcelas else 1
 
                         viewModel.salvarTransacao(
                             tipoTela = tipo,
                             valor = valorFinal,
-                            dataMillis = dataParaSalvar,
+                            dataMillis = calLocal.timeInMillis,
                             categoriaId = selectedCategory!!.id,
                             descricao = description,
                             metodoPagamento = metodoPagamento.name,
-                            totalParcelas = parcelasParaSalvar,
+                            totalParcelas = if (metodoPagamento == MetodoPagamento.CREDITO) numeroParcelas else 1,
                             onSuccess = {
                                 Toast.makeText(context, "Salvo com sucesso", Toast.LENGTH_SHORT).show()
                                 navController.popBackStack()

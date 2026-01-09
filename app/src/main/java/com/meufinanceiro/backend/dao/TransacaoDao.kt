@@ -52,4 +52,8 @@ interface TransacaoDao {
         ORDER BY dataMillis DESC
     """)
     suspend fun buscarPorDescricao(query: String): List<TransacaoComCategoria>
+
+    // Adicione isso ao seu TransacaoDao
+    @Query("SELECT SUM(valor) FROM transacoes WHERE dataMillis BETWEEN :inicio AND :fim AND tipo = :tipo")
+    suspend fun somaPorPeriodoETipo(inicio: Long, fim: Long, tipo: String): Double?
 }
